@@ -1,0 +1,56 @@
+{
+    "name": "magic-world-token",
+    "version": "1.0.0",
+    "description": "A play-to-earn ERC20 token system for casual gaming on Polygon",
+    "main": "index.js",
+    "scripts": {
+        "compile": "npx hardhat compile",
+        "test": "npx hardhat test",
+        "coverage": "npx hardhat coverage",
+        "deploy:local": "npx hardhat run scripts/deploy.js --network localhost",
+        "deploy:mumbai": "npx hardhat run scripts/deploy.js --network polygonMumbai",
+        "deploy:polygon": "npx hardhat run scripts/deploy.js --network polygon",
+        "setup:mumbai": "npx hardhat run scripts/setup.js --network polygonMumbai",
+        "setup:polygon": "npx hardhat run scripts/setup.js --network polygon",
+        "verify:mumbai": "npx hardhat verify --network polygonMumbai",
+        "verify:polygon": "npx hardhat verify --network polygon",
+        "node": "npx hardhat node",
+        "clean": "npx hardhat clean"
+    },
+    "keywords": [
+        "blockchain",
+        "ethereum",
+        "polygon",
+        "erc20",
+        "gaming",
+        "play-to-earn",
+        "solidity",
+        "hardhat"
+    ],
+    "author": "Magic World Team",
+    "license": "MIT",
+    "devDependencies": {
+        "@nomicfoundation/hardhat-chai-matchers": "^2.0.0",
+        "@nomicfoundation/hardhat-ethers": "^3.0.0",
+        "@nomicfoundation/hardhat-network-helpers": "^1.0.0",
+        "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+        "@nomicfoundation/hardhat-verify": "^2.0.0",
+        "@typechain/ethers-v6": "^0.5.0",
+        "@typechain/hardhat": "^9.0.0",
+        "@types/chai": "^4.2.0",
+        "@types/mocha": ">=9.1.0",
+        "@types/node": ">=18.0.0",
+        "chai": "^4.2.0",
+        "ethers": "^6.4.0",
+        "hardhat": "^2.19.0",
+        "hardhat-gas-reporter": "^1.0.8",
+        "solidity-coverage": "^0.8.0",
+        "ts-node": ">=8.0.0",
+        "typechain": "^8.3.0",
+        "typescript": ">=4.5.0"
+    },
+    "dependencies": {
+        "@openzeppelin/contracts": "^5.0.0",
+        "dotenv": "^16.3.0"
+    }
+}

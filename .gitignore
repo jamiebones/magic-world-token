@@ -1,0 +1,47 @@
+# Hardhat files
+cache/
+artifacts/
+coverage/
+coverage.json
+typechain-types/
+
+# Environment variables
+.env
+
+# Dependencies
+node_modules/
+
+# Logs
+*.log
+logs/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Build outputs
+dist/
+build/
+
+# Test coverage
+.nyc_output/
+
+# Deployment artifacts
+deployments/
+.openzeppelin/
+
+# Temporary files
+*.tmp
+*.temp
+
+# Gas reports
+gas-report.txt
+
+# Slither reports
+slither-report.json
