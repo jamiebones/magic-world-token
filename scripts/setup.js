@@ -1,20 +1,31 @@
 const { ethers } = require("hardhat");
+const { getDeployment } = require("./getDeployment");
 require("dotenv").config();
 
 async function main() {
     console.log("Running post-deployment setup...");
 
-    // You'll need to update these addresses after deployment
-    const TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || "";
-    const GAME_ADDRESS = process.env.GAME_ADDRESS || "";
+    // Try to get deployment addresses from deployment file first
+    let TOKEN_ADDRESS, GAME_ADDRESS;
+
+    try {
+        const deployment = getDeployment(hre.network.name);
+        TOKEN_ADDRESS = deployment.contracts.token.address;
+        GAME_ADDRESS = deployment.contracts.game.address;
+        console.log(`Using addresses from deployment file for ${hre.network.name}`);
+    } catch (error) {
+        // Fallback to environment variables
+        TOKEN_ADDRESS = process.env.TOKEN_ADDRESS || "";
+        GAME_ADDRESS = process.env.GAME_ADDRESS || "";
+        console.log("Using addresses from environment variables");
+    }
+
     const GAME_ADMIN_ADDRESS = process.env.GAME_ADMIN_ADDRESS || "";
 
     if (!TOKEN_ADDRESS || !GAME_ADDRESS) {
-        console.error("Please set TOKEN_ADDRESS and GAME_ADDRESS in your .env file");
+        console.error("Please deploy contracts first or set TOKEN_ADDRESS and GAME_ADDRESS in your .env file");
         process.exit(1);
-    }
-
-    const [deployer] = await ethers.getSigners();
+    } const [deployer] = await ethers.getSigners();
     console.log("Setup running with account:", deployer.address);
 
     // Get contract instances

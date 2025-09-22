@@ -54,6 +54,12 @@ async function main() {
     await grantRoleTx.wait();
     console.log("GAME_OPERATOR_ROLE granted to Game Contract");
 
+    // Grant REWARD_DISTRIBUTOR_ROLE to deployer (so they can distribute rewards initially)
+    const REWARD_DISTRIBUTOR_ROLE = await game.REWARD_DISTRIBUTOR_ROLE();
+    const grantDistributorTx = await game.grantRole(REWARD_DISTRIBUTOR_ROLE, deployer.address);
+    await grantDistributorTx.wait();
+    console.log("REWARD_DISTRIBUTOR_ROLE granted to deployer");
+
     // Verify balances
     const gameBalance = await token.balanceOf(gameAddress);
     const deployerBalance = await token.balanceOf(deployer.address);
@@ -89,10 +95,50 @@ async function main() {
         }
     };
 
+    // Save deployment info to file
+    const fs = require('fs');
+    const path = require('path');
+
+    const deploymentsDir = path.join(__dirname, '..', 'deployments');
+    if (!fs.existsSync(deploymentsDir)) {
+        fs.mkdirSync(deploymentsDir);
+    }
+
+    const deploymentFile = path.join(deploymentsDir, `${hre.network.name}.json`);
+    fs.writeFileSync(deploymentFile, JSON.stringify(deploymentInfo, null, 2));
+    console.log(`Deployment info saved to: ${deploymentFile}`);
+
+    // Verify contracts on Polygonscan (skip for localhost)
+    if (hre.network.name !== "localhost" && hre.network.name !== "hardhat") {
+        console.log("\n=== Verifying Contracts ===");
+
+        try {
+            console.log("Verifying Token Contract...");
+            await hre.run("verify:verify", {
+                address: tokenAddress,
+                constructorArguments: [TOKEN_NAME, TOKEN_SYMBOL, INITIAL_SUPPLY],
+            });
+            console.log("Token contract verified ✅");
+        } catch (error) {
+            console.log("Token verification failed:", error.message);
+        }
+
+        try {
+            console.log("Verifying Game Contract...");
+            await hre.run("verify:verify", {
+                address: gameAddress,
+                constructorArguments: [tokenAddress],
+            });
+            console.log("Game contract verified ✅");
+        } catch (error) {
+            console.log("Game verification failed:", error.message);
+        }
+    }
+
     console.log("\n=== Next Steps ===");
     console.log("1. Copy .env.example to .env and fill in your configuration");
     console.log("2. Run setup script: npm run setup:" + hre.network.name);
-    console.log("3. Verify contracts: npm run verify:" + hre.network.name, tokenAddress, gameAddress);
+    console.log("3. Contract addresses saved to:", deploymentFile);
     console.log("\nDeployment completed successfully! 🚀");
 }
 

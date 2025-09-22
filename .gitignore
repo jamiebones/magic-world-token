@@ -33,7 +33,7 @@ build/
 .nyc_output/
 
 # Deployment artifacts
-deployments/
+deployments/*.json
 .openzeppelin/
 
 # Temporary files
