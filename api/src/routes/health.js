@@ -89,8 +89,8 @@ router.get('/', async (req, res) => {
 
         // Determine overall status - be more lenient for Railway
         // Only fail if database or blockchain are completely down
-        const criticalServicesDown = 
-            healthCheck.services.database?.status === 'error' || 
+        const criticalServicesDown =
+            healthCheck.services.database?.status === 'error' ||
             healthCheck.services.database?.status === 'disconnected' ||
             healthCheck.services.blockchain?.status === 'error' ||
             healthCheck.services.blockchain?.status === 'disconnected';
