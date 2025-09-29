@@ -29,29 +29,56 @@ router.get('/', async (req, res) => {
 
     try {
         // Check database connection
-        const dbHealth = await databaseService.healthCheck();
-        healthCheck.services.database = dbHealth;
+        try {
+            const dbHealth = await databaseService.healthCheck();
+            healthCheck.services.database = dbHealth;
+        } catch (error) {
+            logger.error('Database health check failed:', error);
+            healthCheck.services.database = {
+                status: 'error',
+                error: error.message
+            };
+            healthCheck.status = 'degraded';
+        }
 
         // Check blockchain connection
-        if (blockchainService.isInitialized) {
+        try {
+            if (blockchainService.isInitialized) {
+                healthCheck.services.blockchain = {
+                    status: 'connected',
+                    network: process.env.BLOCKCHAIN_NETWORK
+                };
+            } else {
+                healthCheck.services.blockchain = {
+                    status: 'disconnected',
+                    error: 'Blockchain service not initialized'
+                };
+                healthCheck.status = 'degraded';
+            }
+        } catch (error) {
+            logger.error('Blockchain health check failed:', error);
             healthCheck.services.blockchain = {
-                status: 'connected',
-                network: process.env.BLOCKCHAIN_NETWORK
-            };
-        } else {
-            healthCheck.services.blockchain = {
-                status: 'disconnected',
-                error: 'Blockchain service not initialized'
+                status: 'error',
+                error: error.message
             };
             healthCheck.status = 'degraded';
         }
 
         // Check API key system
-        const apiKeyCount = (await getApiKeyStats()).length;
-        healthCheck.services.authentication = {
-            status: 'active',
-            activeKeys: apiKeyCount
-        };
+        try {
+            const apiKeyCount = (await getApiKeyStats()).length;
+            healthCheck.services.authentication = {
+                status: 'active',
+                activeKeys: apiKeyCount
+            };
+        } catch (error) {
+            logger.error('API key stats check failed:', error);
+            healthCheck.services.authentication = {
+                status: 'error',
+                error: error.message
+            };
+            healthCheck.status = 'degraded';
+        }
 
         // Add memory usage
         const memUsage = process.memoryUsage();
@@ -60,15 +87,20 @@ router.get('/', async (req, res) => {
             total: Math.round(memUsage.heapTotal / 1024 / 1024) + ' MB'
         };
 
-        // Determine overall status
-        const allServicesHealthy = Object.values(healthCheck.services)
-            .every(service => service.status === 'connected' || service.status === 'active' || service.status === 'healthy');
+        // Determine overall status - be more lenient for Railway
+        // Only fail if database or blockchain are completely down
+        const criticalServicesDown = 
+            healthCheck.services.database?.status === 'error' || 
+            healthCheck.services.database?.status === 'disconnected' ||
+            healthCheck.services.blockchain?.status === 'error' ||
+            healthCheck.services.blockchain?.status === 'disconnected';
 
-        if (!allServicesHealthy) {
+        if (criticalServicesDown) {
             healthCheck.status = 'unhealthy';
             return res.status(503).json(healthCheck);
         }
 
+        // If we get here, service is healthy enough for Railway
         res.json(healthCheck);
 
     } catch (error) {
