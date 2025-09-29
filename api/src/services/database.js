@@ -110,6 +110,21 @@ class DatabaseService {
                 // Collection might not exist, that's okay
             }
 
+            // Get connection pool info safely
+            let connectionPool = { size: 0, available: 0 };
+            try {
+                const serverConfig = mongoose.connection.db?.serverConfig;
+                if (serverConfig?.s) {
+                    connectionPool = {
+                        size: serverConfig.s.poolSize || 0,
+                        available: serverConfig.s.availableConnections?.length || 0
+                    };
+                }
+            } catch (poolError) {
+                // Ignore connection pool info errors
+                logger.debug('Could not get connection pool info:', poolError.message);
+            }
+
             return {
                 status: 'healthy',
                 database: mongoose.connection.name,
@@ -118,10 +133,7 @@ class DatabaseService {
                 dataSize: dbStats.dataSize || 0,
                 storageSize: dbStats.storageSize || 0,
                 initialized: isInitialized,
-                connectionPool: {
-                    size: mongoose.connection.db?.serverConfig?.s?.poolSize || 0,
-                    available: mongoose.connection.db?.serverConfig?.s?.availableConnections?.length || 0
-                }
+                connectionPool
             };
         } catch (error) {
             return {
