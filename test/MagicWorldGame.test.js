@@ -230,7 +230,6 @@ describe("MagicWorldGame", function () {
         describe("Parameter Updates", function () {
             it("Should allow game admin to update daily reward limit", async function () {
                 const newLimit = ethers.parseEther("2000");
-
                 await expect(
                     game.connect(gameAdmin).setDailyRewardLimit(newLimit)
                 )

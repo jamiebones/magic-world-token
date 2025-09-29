@@ -120,140 +120,359 @@ GET /api/tokens/transaction/0x1234567890abcdef...
 X-API-Key: your-api-key
 ```
 
-## 🎮 Game Integration Examples
+## 🎮 Game Integration
 
-### Unity (C#)
-```csharp
-using UnityEngine;
-using System.Collections;
-using System.Collections.Generic;
+### JavaScript/Node.js with Axios
 
-public class TokenAPI : MonoBehaviour 
-{
-    private string apiKey = "your-api-key";
-    private string baseUrl = "http://localhost:3000/api";
-    
-    public IEnumerator DistributeTokens(List<string> players, List<string> amounts)
-    {
-        var data = new {
-            recipients = players.ToArray(),
-            amounts = amounts.ToArray(),
-            reason = "Game Reward"
-        };
-        
-        string json = JsonUtility.ToJson(data);
-        
-        using (UnityWebRequest request = UnityWebRequest.PostWwwForm(baseUrl + "/tokens/distribute", ""))
-        {
-            request.SetRequestHeader("X-API-Key", apiKey);
-            request.SetRequestHeader("Content-Type", "application/json");
-            request.uploadHandler = new UploadHandlerRaw(System.Text.Encoding.UTF8.GetBytes(json));
-            
-            yield return request.SendWebRequest();
-            
-            if (request.result == UnityWebRequest.Result.Success)
-            {
-                Debug.Log("Tokens distributed successfully!");
-            }
-        }
-    }
-}
-```
-
-### JavaScript/Node.js
 ```javascript
 const axios = require('axios');
 
-class TokenAPI {
-    constructor(apiKey, baseUrl = 'http://localhost:3000/api') {
+class MagicWorldTokenAPI {
+    constructor(apiKey, baseUrl = 'http://localhost:3000') {
         this.apiKey = apiKey;
         this.baseUrl = baseUrl;
         this.headers = { 'X-API-Key': apiKey };
     }
-    
-    async distributeTokens(recipients, amounts, reason = 'Game Reward') {
-        try {
-            const response = await axios.post(`${this.baseUrl}/tokens/distribute`, {
-                recipients,
-                amounts,
-                reason
-            }, { headers: this.headers });
-            
-            return response.data;
-        } catch (error) {
-            console.error('Token distribution failed:', error.response?.data || error.message);
-            throw error;
-        }
+
+    // ==========================================
+    // HEALTH CHECK ENDPOINTS
+    // ==========================================
+
+    /**
+     * Basic health check
+     */
+    async getHealth() {
+        const response = await axios.get(`${this.baseUrl}/health`);
+        return response.data;
     }
-    
-    async getPlayerBalance(playerAddress) {
-        try {
-            const response = await axios.get(`${this.baseUrl}/players/balance/${playerAddress}`, 
-                { headers: this.headers });
-            return response.data;
-        } catch (error) {
-            console.error('Failed to get player balance:', error.response?.data || error.message);
-            throw error;
+
+    /**
+     * Detailed health check with contract verification
+     */
+    async getDetailedHealth() {
+        const response = await axios.get(`${this.baseUrl}/health/detailed`);
+        return response.data;
+    }
+
+    // ==========================================
+    // TOKEN DISTRIBUTION ENDPOINTS
+    // ==========================================
+
+    /**
+     * Distribute different amounts to multiple players
+     * @param {string[]} recipients - Array of player addresses
+     * @param {string[]} amounts - Array of token amounts (in tokens, not wei)
+     * @param {string} reason - Reason for distribution
+     */
+    async distributeTokens(recipients, amounts, reason = 'Token Distribution') {
+        const response = await axios.post(`${this.baseUrl}/api/tokens/distribute`, {
+            recipients,
+            amounts,
+            reason
+        }, { headers: this.headers });
+
+        return response.data;
+    }
+
+    /**
+     * Distribute equal amounts to multiple players (gas efficient)
+     * @param {string[]} recipients - Array of player addresses
+     * @param {string} amount - Token amount per player
+     * @param {string} reason - Reason for distribution
+     */
+    async distributeEqualTokens(recipients, amount, reason = 'Equal Token Distribution') {
+        const response = await axios.post(`${this.baseUrl}/api/tokens/distribute-equal`, {
+            recipients,
+            amount,
+            reason
+        }, { headers: this.headers });
+
+        return response.data;
+    }
+
+    /**
+     * Estimate gas cost for distribution
+     * @param {string} method - 'distributeRewards' or 'distributeEqualRewards'
+     * @param {string[]} recipients - Array of player addresses
+     * @param {string[]|string} amountsOrAmount - Amounts array or single amount
+     */
+    async estimateGas(method, recipients, amountsOrAmount) {
+        const data = { method, recipients };
+
+        if (method === 'distributeRewards') {
+            data.amounts = amountsOrAmount;
+        } else {
+            data.amount = amountsOrAmount;
         }
+
+        const response = await axios.post(`${this.baseUrl}/api/tokens/estimate-gas`, data, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    // ==========================================
+    // TOKEN QUERY ENDPOINTS
+    // ==========================================
+
+    /**
+     * Get player's token balance
+     * @param {string} address - Player's wallet address
+     */
+    async getPlayerBalance(address) {
+        const response = await axios.get(`${this.baseUrl}/api/tokens/balance/${address}`, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Get contract statistics
+     */
+    async getContractStats() {
+        const response = await axios.get(`${this.baseUrl}/api/tokens/stats`, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Check transaction status
+     * @param {string} txHash - Transaction hash
+     */
+    async getTransactionStatus(txHash) {
+        const response = await axios.get(`${this.baseUrl}/api/tokens/transaction/${txHash}`, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    // ==========================================
+    // PLAYER ENDPOINTS
+    // ==========================================
+
+    /**
+     * Get player statistics
+     * @param {string} address - Player's wallet address
+     */
+    async getPlayerStats(address) {
+        const response = await axios.get(`${this.baseUrl}/api/players/stats/${address}`, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Get player's token balance (alternative endpoint)
+     * @param {string} address - Player's wallet address
+     */
+    async getPlayerBalanceAlt(address) {
+        const response = await axios.get(`${this.baseUrl}/api/players/balance/${address}`, {
+            headers: this.headers
+        });
+
+        return response.data;
+    }
+
+    /**
+     * Validate Ethereum address
+     * @param {string} address - Address to validate
+     */
+    async validateAddress(address) {
+        const response = await axios.get(`${this.baseUrl}/api/players/validate/${address}`, {
+            headers: this.headers
+        });
+
+        return response.data;
     }
 }
 
-// Usage example
-const tokenAPI = new TokenAPI('your-api-key');
+// ==========================================
+// USAGE EXAMPLES
+// ==========================================
 
-// Reward players after a match
-tokenAPI.distributeTokens(
-    ['0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611', '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3612'],
-    ['100', '50'],
-    'Match Victory Rewards'
-).then(result => {
-    console.log('Rewards distributed:', result);
-});
-```
+// Initialize API client
+const tokenAPI = new MagicWorldTokenAPI('your-api-key-here');
 
-### Python
-```python
-import requests
-import json
+// Example 1: Health Check
+async function checkHealth() {
+    try {
+        const health = await tokenAPI.getHealth();
+        console.log('Service Status:', health.status);
+        console.log('Uptime:', health.uptime, 'seconds');
+    } catch (error) {
+        console.error('Health check failed:', error.response?.data || error.message);
+    }
+}
 
-class TokenAPI:
-    def __init__(self, api_key, base_url="http://localhost:3000/api"):
-        self.api_key = api_key
-        self.base_url = base_url
-        self.headers = {"X-API-Key": api_key, "Content-Type": "application/json"}
-    
-    def distribute_tokens(self, recipients, amounts, reason="Game Reward"):
-        data = {
-            "recipients": recipients,
-            "amounts": amounts,
-            "reason": reason
+// Example 2: Distribute Tokens (Different Amounts)
+async function distributeTournamentRewards() {
+    try {
+        const result = await tokenAPI.distributeTokens(
+            [
+                '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611', // 1st place
+                '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3612', // 2nd place
+                '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3613'  // 3rd place
+            ],
+            ['1000', '500', '250'], // MWT tokens
+            'Weekly Tournament Prizes'
+        );
+
+        console.log('Transaction Hash:', result.data.transactionHash);
+        console.log('Block Number:', result.data.blockNumber);
+        console.log('Gas Used:', result.data.gasUsed);
+    } catch (error) {
+        console.error('Distribution failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 3: Distribute Equal Tokens (Gas Efficient)
+async function distributeDailyRewards() {
+    try {
+        const activePlayers = [
+            '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611',
+            '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3612',
+            '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3613'
+        ];
+
+        const result = await tokenAPI.distributeEqualTokens(
+            activePlayers,
+            '10', // 10 MWT tokens each
+            'Daily Login Bonus'
+        );
+
+        console.log('Distributed to', result.data.recipients, 'players');
+        console.log('Total tokens distributed:', result.data.totalAmount);
+    } catch (error) {
+        console.error('Equal distribution failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 4: Get Player Balance
+async function checkPlayerBalance() {
+    try {
+        const balance = await tokenAPI.getPlayerBalance('0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611');
+        console.log('Player Balance:', balance.data.balance, balance.data.currency);
+    } catch (error) {
+        console.error('Balance check failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 5: Get Player Statistics
+async function getPlayerStats() {
+    try {
+        const stats = await tokenAPI.getPlayerStats('0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611');
+        console.log('Daily Received:', stats.data.dailyReceived);
+        console.log('Total Earned:', stats.data.totalEarned);
+        console.log('Last Reward:', stats.data.lastReward);
+    } catch (error) {
+        console.error('Stats retrieval failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 6: Estimate Gas Cost
+async function estimateDistributionCost() {
+    try {
+        const estimate = await tokenAPI.estimateGas(
+            'distributeEqualRewards',
+            ['0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611', '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3612'],
+            '25'
+        );
+
+        console.log('Estimated Gas:', estimate.data.gasEstimate);
+        console.log('Estimated Cost (ETH):', estimate.data.estimatedCostETH);
+    } catch (error) {
+        console.error('Gas estimation failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 7: Check Transaction Status
+async function checkTransaction(txHash) {
+    try {
+        const status = await tokenAPI.getTransactionStatus(txHash);
+        console.log('Transaction Status:', status.data.status);
+        console.log('Block Number:', status.data.blockNumber);
+        console.log('Gas Used:', status.data.gasUsed);
+    } catch (error) {
+        console.error('Transaction check failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 8: Validate Address
+async function validatePlayerAddress() {
+    try {
+        const validation = await tokenAPI.validateAddress('0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611');
+        console.log('Address Valid:', validation.data.isValid);
+        console.log('Checksum Address:', validation.data.checksumAddress);
+    } catch (error) {
+        console.error('Address validation failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 9: Get Contract Statistics
+async function getSystemStats() {
+    try {
+        const stats = await tokenAPI.getContractStats();
+        console.log('Total Distributed:', stats.data.totalDistributed);
+        console.log('Unique Players:', stats.data.uniquePlayers);
+        console.log('Contract Balance:', stats.data.contractBalance);
+    } catch (error) {
+        console.error('Stats retrieval failed:', error.response?.data || error.message);
+    }
+}
+
+// Example 10: Comprehensive Game Integration
+async function handleGameEvent(eventType, players, rewards) {
+    try {
+        switch (eventType) {
+            case 'daily_login':
+                await tokenAPI.distributeEqualTokens(players, '5', 'Daily Login Reward');
+                break;
+
+            case 'match_win':
+                // Different rewards based on performance
+                await tokenAPI.distributeTokens(
+                    players.map(p => p.address),
+                    players.map(p => p.reward.toString()),
+                    'Match Victory Rewards'
+                );
+                break;
+
+            case 'achievement':
+                for (const player of players) {
+                    await tokenAPI.distributeTokens(
+                        [player.address],
+                        [player.reward.toString()],
+                        `Achievement: ${player.achievement}`
+                    );
+                }
+                break;
+
+            case 'tournament':
+                await tokenAPI.distributeTokens(
+                    players.map(p => p.address),
+                    players.map(p => p.prize.toString()),
+                    'Tournament Prizes'
+                );
+                break;
         }
-        
-        response = requests.post(
-            f"{self.base_url}/tokens/distribute",
-            headers=self.headers,
-            data=json.dumps(data)
-        )
-        
-        return response.json()
-    
-    def get_player_balance(self, player_address):
-        response = requests.get(
-            f"{self.base_url}/players/balance/{player_address}",
-            headers=self.headers
-        )
-        
-        return response.json()
 
-# Usage
-api = TokenAPI('your-api-key')
-result = api.distribute_tokens(
-    ['0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611'],
-    ['100'],
-    'Achievement Unlocked'
-)
-print(f"Transaction hash: {result['data']['transactionHash']}")
+        console.log(`${eventType} rewards distributed successfully`);
+    } catch (error) {
+        console.error(`Failed to handle ${eventType}:`, error.response?.data || error.message);
+        throw error;
+    }
+}
+
+// Export for use in other modules
+module.exports = MagicWorldTokenAPI;
 ```
+
 
 ### MongoDB Atlas Setup
 
@@ -325,30 +544,9 @@ DATABASE_URL=postgresql://user:pass@localhost:5432/magic_world_token
 REDIS_URL=redis://localhost:6379
 ```
 
-### Docker Deployment
-```dockerfile
-FROM node:18-alpine
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
-COPY . .
-EXPOSE 3000
-CMD ["npm", "start"]
-```
 
-### Reverse Proxy (Nginx)
-```nginx
-server {
-    listen 80;
-    server_name api.yourgame.com;
-    
-    location / {
-        proxy_pass http://localhost:3000;
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-    }
-}
-```
+
+
 
 ## 🎯 Use Cases
 

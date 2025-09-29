@@ -56,7 +56,6 @@ async function validateApiKey(apiKey) {
         }
 
         const hashedKey = crypto.createHash('sha256').update(apiKey).digest('hex');
-
         // Check cache first
         const cached = API_KEY_CACHE.get(hashedKey);
         if (cached && (Date.now() - cached.cachedAt) < CACHE_TTL) {
@@ -74,7 +73,6 @@ async function validateApiKey(apiKey) {
             data: keyData,
             cachedAt: Date.now()
         });
-
         return keyData;
     } catch (error) {
         logger.error('Error validating API key:', error);

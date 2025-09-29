@@ -1,4 +1,6 @@
 const { ethers } = require("hardhat");
+const fs = require('fs');
+const path = require('path');
 require("dotenv").config();
 
 async function main() {
@@ -96,8 +98,7 @@ async function main() {
     };
 
     // Save deployment info to file
-    const fs = require('fs');
-    const path = require('path');
+   
 
     const deploymentsDir = path.join(__dirname, '..', 'deployments');
     if (!fs.existsSync(deploymentsDir)) {
