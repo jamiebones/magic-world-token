@@ -119,8 +119,8 @@ class DatabaseService {
                 storageSize: dbStats.storageSize || 0,
                 initialized: isInitialized,
                 connectionPool: {
-                    size: mongoose.connection.db.serverConfig.s.poolSize || 0,
-                    available: mongoose.connection.db.serverConfig.s.availableConnections?.length || 0
+                    size: mongoose.connection.db?.serverConfig?.s?.poolSize || 0,
+                    available: mongoose.connection.db?.serverConfig?.s?.availableConnections?.length || 0
                 }
             };
         } catch (error) {
