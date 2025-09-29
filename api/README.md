@@ -521,6 +521,136 @@ npm run setup:mongo
 
 ## 🚀 Production Deployment
 
+### Railway Deployment (Recommended)
+
+Railway provides an easy way to deploy your API with automatic scaling, databases, and monitoring.
+
+#### Prerequisites
+- Railway account ([sign up here](https://railway.app))
+- GitHub repository with your API code
+- MongoDB Atlas account (for database)
+
+#### GitHub-Based Deployment
+
+1. **Push your code to GitHub:**
+   ```bash
+   git add .
+   git commit -m "Deploy Magic World Token API"
+   git push origin main
+   ```
+
+2. **Connect to Railway:**
+   - Go to [Railway.app](https://railway.app) and sign in
+   - Click "New Project" → "Deploy from GitHub repo"
+   - Select your repository: `jamiebones/magic-world-token`
+   - Choose the `api/` folder as the root directory
+
+3. **Configure Environment Variables:**
+   In your Railway project settings, add these variables:
+
+   ```bash
+   # Required Variables
+   NODE_ENV=production
+   PORT=3000
+   BLOCKCHAIN_NETWORK=bscTestnet
+   PRIVATE_KEY=your-production-private-key
+   RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545/
+   TOKEN_CONTRACT_ADDRESS=0x65bC50288b0264ae038EFE6065962dc247eC66Ce
+   GAME_CONTRACT_ADDRESS=0xa13948CE5FEc61163054d56fA45ac28Fa6870e08
+   JWT_SECRET=your-very-strong-jwt-secret-here
+   API_KEY_SECRET=your-api-key-secret-here
+   MONGODB_URI=your-mongodb-atlas-connection-string
+
+   # Optional Variables
+   BSCSCAN_API_KEY=your-bscscan-api-key
+   RATE_LIMIT_MAX_REQUESTS=1000
+   MAX_BATCH_SIZE=200
+   ```
+
+4. **Deploy:**
+   Railway will automatically build and deploy when you push to your main branch.
+
+5. **Monitor Deployment:**
+   - View build logs in Railway dashboard
+   - Check your app URL once deployed
+   - Monitor performance and logs
+
+#### Railway Configuration Files
+
+The following files are included for Railway deployment:
+
+- **`railway.json`**: Railway-specific configuration
+- **`.env.example`**: Template for environment variables
+
+#### Database Setup
+
+Railway provides PostgreSQL by default, but this API uses MongoDB Atlas:
+
+1. Create a MongoDB Atlas cluster
+2. Get your connection string
+3. Add it as `MONGODB_URI` environment variable
+4. Run the setup script (optional):
+   ```bash
+   railway run npm run setup:mongo
+   ```
+
+#### Health Checks & Monitoring
+
+Railway automatically monitors your app using the `/health` endpoint. In your Railway dashboard you can:
+
+- View real-time logs
+- Monitor performance metrics
+- Set up alerts for downtime
+- Scale your application
+- View environment variables
+
+#### Automatic Deployments
+
+Railway will automatically redeploy when you push changes to your main branch:
+
+```bash
+git add .
+git commit -m "Update API functionality"
+git push origin main
+```
+
+Railway will build and deploy automatically.
+
+#### Scaling
+
+Railway automatically scales your app based on traffic. For high-traffic games:
+
+1. Upgrade your Railway plan
+2. Increase rate limits in environment variables
+3. Monitor performance with Railway's dashboard
+
+### Alternative Deployment Options
+
+#### Heroku Deployment
+```bash
+# Create Heroku app
+heroku create your-api-name
+
+# Set environment variables
+heroku config:set NODE_ENV=production
+heroku config:set MONGODB_URI=your-mongodb-uri
+# ... set other variables
+
+# Deploy
+git push heroku main
+```
+
+#### Docker Deployment
+```bash
+# Build Docker image
+docker build -t magic-world-api .
+
+# Run locally
+docker run -p 3000:3000 --env-file .env magic-world-api
+
+# Deploy to any container service (AWS ECS, Google Cloud Run, etc.)
+```
+
 ### Environment Configuration
 ```bash
 # Production settings
@@ -528,11 +658,11 @@ NODE_ENV=production
 PORT=3000
 
 # Blockchain configuration
-BLOCKCHAIN_NETWORK=polygon
+BLOCKCHAIN_NETWORK=bscTestnet
 PRIVATE_KEY=your-production-private-key
-RPC_URL=https://polygon-rpc.com
-TOKEN_CONTRACT_ADDRESS=your-production-token-address
-GAME_CONTRACT_ADDRESS=your-production-game-address
+RPC_URL=https://data-seed-prebsc-1-s1.binance.org:8545/
+TOKEN_CONTRACT_ADDRESS=0x65bC50288b0264ae038EFE6065962dc247eC66Ce
+GAME_CONTRACT_ADDRESS=0xa13948CE5FEc61163054d56fA45ac28Fa6870e08
 
 # Security
 JWT_SECRET=your-strong-jwt-secret
