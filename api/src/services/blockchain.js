@@ -2,8 +2,8 @@ const { ethers } = require('ethers');
 const logger = require('../utils/logger');
 
 // Import contract ABIs 
-const MagicWorldTokenABI = require('../../../artifacts/contracts/MagicWorldToken.sol/MagicWorldToken.json').abi;
-const MagicWorldGameABI = require('../../../artifacts/contracts/MagicWorldGame.sol/MagicWorldGame.json').abi;
+const MagicWorldTokenABI = require('../../contracts/MagicWorldToken.json').abi;
+const MagicWorldGameABI = require('../../contracts/MagicWorldGame.json').abi;
 
 class BlockchainService {
     constructor() {

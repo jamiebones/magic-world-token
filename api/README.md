@@ -2,6 +2,23 @@
 
 A REST API service for blockchain integration, enabling games to distribute Magic World Tokens to players efficiently and securely.
 
+## 📁 Project Structure
+
+```
+api/
+├── contracts/           # Contract ABI files for blockchain integration
+│   ├── MagicWorldToken.json
+│   ├── MagicWorldGame.json
+│   └── IMagicWorldToken.json
+├── src/
+│   ├── services/
+│   │   └── blockchain.js  # References local ABI files from contracts/
+│   └── ...
+├── Dockerfile
+├── railway.json
+└── .env.example
+```
+
 ## 🚀 Quick Start
 
 ### Prerequisites
