@@ -54,8 +54,19 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
 
     /**
      * @dev Batch transfer different amounts to multiple recipients
-     * @param recipients Array of recipient addresses
+     * @param recipients Array of recipient addresses (must be unique)
      * @param amounts Array of amounts to transfer (must match recipients length)
+     *
+     * Requirements:
+     * - Caller must have GAME_OPERATOR_ROLE
+     * - Contract must not be paused
+     * - Arrays must have matching lengths
+     * - Recipients array must not be empty
+     * - Recipients array must not exceed MAX_BATCH_SIZE
+     * - No recipient can be the zero address
+     * - No duplicate recipients allowed
+     * - All amounts must be greater than zero
+     * - Caller must have sufficient balance
      */
     function batchTransfer(
         address[] calldata recipients,
@@ -73,16 +84,19 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
 
         uint256 totalAmount = 0;
 
-        // Calculate total amount and perform transfers
+        // Calculate total amount and perform transfers with validation
         for (uint256 i = 0; i < recipients.length; i++) {
-            require(
-                recipients[i] != address(0),
-                "MWT: Transfer to zero address"
-            );
+            address recipient = recipients[i];
+
             require(amounts[i] > 0, "MWT: Zero amount transfer");
 
+            // Check for duplicate recipients
+            for (uint256 j = i + 1; j < recipients.length; j++) {
+                require(recipients[j] != recipient, "MWT: Duplicate recipient");
+            }
+
             totalAmount += amounts[i];
-            _transfer(_msgSender(), recipients[i], amounts[i]);
+            _transfer(_msgSender(), recipient, amounts[i]);
         }
 
         emit BatchTransfer(_msgSender(), totalAmount, recipients.length);
@@ -90,8 +104,18 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
 
     /**
      * @dev Batch transfer same amount to multiple recipients
-     * @param recipients Array of recipient addresses
+     * @param recipients Array of recipient addresses (must be unique)
      * @param amount Amount to transfer to each recipient
+     *
+     * Requirements:
+     * - Caller must have GAME_OPERATOR_ROLE
+     * - Contract must not be paused
+     * - Recipients array must not be empty
+     * - Recipients array must not exceed MAX_BATCH_SIZE
+     * - No recipient can be the zero address
+     * - No duplicate recipients allowed
+     * - Amount must be greater than zero
+     * - Caller must have sufficient balance for total transfer
      */
     function batchTransferEqual(
         address[] calldata recipients,
@@ -103,19 +127,23 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
             "MWT: Batch size too large"
         );
         require(amount > 0, "MWT: Zero amount transfer");
+
         uint256 totalAmount = amount * recipients.length;
         require(
             balanceOf(_msgSender()) >= totalAmount,
             "MWT: Insufficient balance"
         );
 
-        // Perform transfers
+        // Validate recipients and perform transfers
         for (uint256 i = 0; i < recipients.length; i++) {
-            require(
-                recipients[i] != address(0),
-                "MWT: Transfer to zero address"
-            );
-            _transfer(_msgSender(), recipients[i], amount);
+            address recipient = recipients[i];
+
+            // Check for duplicate recipients
+            for (uint256 j = i + 1; j < recipients.length; j++) {
+                require(recipients[j] != recipient, "MWT: Duplicate recipient");
+            }
+
+            _transfer(_msgSender(), recipient, amount);
         }
 
         emit BatchTransferEqual(_msgSender(), recipients, amount);
@@ -124,6 +152,12 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
     /**
      * @dev Pause all token transfers (emergency function)
      * Can only be called by accounts with PAUSE_ROLE
+     *
+     * Requirements:
+     * - Caller must have PAUSE_ROLE
+     * - Contract must not already be paused
+     *
+     * Emits a {Paused} event
      */
     function pause() external onlyRole(PAUSE_ROLE) {
         _pause();
@@ -132,29 +166,51 @@ contract MagicWorldToken is ERC20, AccessControl, Pausable, IMagicWorldToken {
     /**
      * @dev Unpause token transfers
      * Can only be called by accounts with PAUSE_ROLE
+     *
+     * Requirements:
+     * - Caller must have PAUSE_ROLE
+     * - Contract must be paused
+     *
+     * Emits an {Unpaused} event
      */
     function unpause() external onlyRole(PAUSE_ROLE) {
         _unpause();
     }
 
     /**
-     * @dev Override transfer to respect pause state
+     * @dev Override transfer to respect pause state and allow burning to zero address
+     * @param to Recipient address (can be zero for burning)
+     * @param amount Amount of tokens to transfer
+     * @return bool Returns true if transfer succeeded
+     *
+     * Requirements:
+     * - Contract must not be paused
      */
     function transfer(
         address to,
         uint256 amount
     ) public virtual override(ERC20, IERC20) whenNotPaused returns (bool) {
+        // Allow transfers to zero address for token burning
         return super.transfer(to, amount);
     }
 
     /**
-     * @dev Override transferFrom to respect pause state
+     * @dev Override transferFrom to respect pause state and allow burning to zero address
+     * @param from Sender address
+     * @param to Recipient address (can be zero for burning)
+     * @param amount Amount of tokens to transfer
+     * @return bool Returns true if transfer succeeded
+     *
+     * Requirements:
+     * - Contract must not be paused
+     * - Caller must have sufficient allowance
      */
     function transferFrom(
         address from,
         address to,
         uint256 amount
     ) public virtual override(ERC20, IERC20) whenNotPaused returns (bool) {
+        // Allow transfers to zero address for token burning
         return super.transferFrom(from, to, amount);
     }
 

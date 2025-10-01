@@ -169,6 +169,10 @@ const options = {
                 description: 'Service health and status endpoints'
             },
             {
+                name: 'Admin',
+                description: 'Administrative endpoints for API key management (requires X-Admin-Secret header)'
+            },
+            {
                 name: 'Tokens',
                 description: 'Token distribution and management endpoints'
             },

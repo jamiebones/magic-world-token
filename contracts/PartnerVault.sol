@@ -1,0 +1,242 @@
+// SPDX-License-Identifier: MIT
+pragma solidity ^0.8.24;
+
+import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/access/AccessControl.sol";
+import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
+import "@openzeppelin/contracts/utils/Pausable.sol";
+
+/**
+ * @title PartnerVault
+ * @dev Time-locked vault for partner token allocations
+ *
+ * Partners can withdraw their allocated tokens after a 3-year lockup period.
+ * The contract includes emergency withdrawal functionality for admins when paused.
+ *
+ * Security Features:
+ * - Time-locked withdrawals (3 years)
+ * - ReentrancyGuard for withdrawal protection
+ * - Pausable for emergency situations
+ * - Role-based access control
+ */
+contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
+    bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
+    IERC20 public immutable token;
+
+    struct PartnerAllocation {
+        uint256 amount;
+        uint256 allocatedAt;
+        bool withdrawn;
+    }
+
+    mapping(address => PartnerAllocation) public partnerAllocations;
+
+    uint256 public constant LOCKUP_PERIOD = 3 * 365 days; // 3 years
+    uint256 public totalAllocated;
+
+    event PartnerAllocated(
+        address indexed partner,
+        uint256 amount,
+        uint256 timestamp
+    );
+    event PartnerWithdrawn(
+        address indexed partner,
+        uint256 amount,
+        uint256 timestamp
+    );
+
+    /**
+     * @dev Constructor sets up the vault with token reference
+     * @param _token Address of the ERC20 token contract
+     *
+     * Requirements:
+     * - Token address must not be zero
+     *
+     * Effects:
+     * - Grants DEFAULT_ADMIN_ROLE and ADMIN_ROLE to deployer
+     */
+    constructor(address _token) {
+        require(_token != address(0), "Invalid token address");
+
+        token = IERC20(_token);
+
+        _grantRole(DEFAULT_ADMIN_ROLE, msg.sender);
+        _grantRole(ADMIN_ROLE, msg.sender);
+    }
+
+    /**
+     * @dev Allocate tokens to a partner
+     * @param partner Partner's address
+     * @param amount Amount of tokens to allocate
+     */
+    function allocateToPartner(
+        address partner,
+        uint256 amount
+    ) external onlyRole(ADMIN_ROLE) whenNotPaused {
+        require(partner != address(0), "Invalid partner address");
+        require(amount > 0, "Amount must be greater than 0");
+        require(
+            partnerAllocations[partner].amount == 0,
+            "Partner already allocated"
+        );
+
+        partnerAllocations[partner] = PartnerAllocation({
+            amount: amount,
+            allocatedAt: block.timestamp,
+            withdrawn: false
+        });
+
+        totalAllocated += amount;
+
+        emit PartnerAllocated(partner, amount, block.timestamp);
+    }
+
+    /**
+     * @dev Partner can withdraw their allocated tokens after lockup period
+     */
+    function withdraw() external nonReentrant whenNotPaused {
+        PartnerAllocation storage allocation = partnerAllocations[msg.sender];
+
+        require(allocation.amount > 0, "No allocation found");
+        require(!allocation.withdrawn, "Already withdrawn");
+        require(
+            block.timestamp >= allocation.allocatedAt + LOCKUP_PERIOD,
+            "Lockup period not ended"
+        );
+
+        allocation.withdrawn = true;
+
+        require(
+            token.balanceOf(address(this)) >= allocation.amount,
+            "Insufficient vault balance"
+        );
+
+        require(
+            token.transfer(msg.sender, allocation.amount),
+            "Transfer failed"
+        );
+
+        emit PartnerWithdrawn(msg.sender, allocation.amount, block.timestamp);
+    }
+
+    /**
+     * @dev Get partner's allocation details
+     * @param partner Partner's address
+     */
+    function getPartnerAllocation(
+        address partner
+    )
+        external
+        view
+        returns (
+            uint256 amount,
+            uint256 allocatedAt,
+            bool withdrawn,
+            uint256 withdrawableAt
+        )
+    {
+        PartnerAllocation memory allocation = partnerAllocations[partner];
+        return (
+            allocation.amount,
+            allocation.allocatedAt,
+            allocation.withdrawn,
+            allocation.allocatedAt + LOCKUP_PERIOD
+        );
+    }
+
+    /**
+     * @dev Get partner's withdrawable amount (0 if not eligible)
+     * @param partner Partner's address
+     */
+    function getWithdrawableAmount(
+        address partner
+    ) external view returns (uint256) {
+        PartnerAllocation memory allocation = partnerAllocations[partner];
+
+        if (allocation.amount == 0 || allocation.withdrawn) {
+            return 0;
+        }
+
+        if (block.timestamp >= allocation.allocatedAt + LOCKUP_PERIOD) {
+            return allocation.amount;
+        }
+
+        return 0;
+    }
+
+    /**
+     * @dev Emergency withdraw function for admin (only if contract is paused)
+     * @param partner Partner's address
+     */
+    function emergencyWithdraw(
+        address partner
+    ) external onlyRole(ADMIN_ROLE) whenPaused {
+        PartnerAllocation storage allocation = partnerAllocations[partner];
+
+        require(allocation.amount > 0, "No allocation found");
+        require(!allocation.withdrawn, "Already withdrawn");
+
+        allocation.withdrawn = true;
+
+        require(
+            token.transfer(partner, allocation.amount),
+            "Emergency transfer failed"
+        );
+
+        emit PartnerWithdrawn(partner, allocation.amount, block.timestamp);
+    }
+
+    /**
+     * @dev Pause the contract (admin only)
+     *
+     * Requirements:
+     * - Caller must have ADMIN_ROLE
+     * - Contract must not already be paused
+     *
+     * Effects:
+     * - Prevents partner withdrawals
+     * - Prevents new allocations
+     * - Enables emergency withdrawals by admin
+     *
+     * Emits a {Paused} event
+     */
+    function pause() external onlyRole(ADMIN_ROLE) {
+        _pause();
+    }
+
+    /**
+     * @dev Unpause the contract (admin only)
+     *
+     * Requirements:
+     * - Caller must have ADMIN_ROLE
+     * - Contract must be paused
+     *
+     * Effects:
+     * - Re-enables partner withdrawals
+     * - Re-enables new allocations
+     * - Disables emergency withdrawals
+     *
+     * Emits an {Unpaused} event
+     */
+    function unpause() external onlyRole(ADMIN_ROLE) {
+        _unpause();
+    }
+
+    /**
+     * @dev Get total allocated tokens across all partners
+     * @return uint256 Total amount of tokens allocated to all partners
+     */
+    function getTotalAllocated() external view returns (uint256) {
+        return totalAllocated;
+    }
+
+    /**
+     * @dev Get current token balance held by the vault
+     * @return uint256 Current balance of tokens in the vault contract
+     *
+     * Note: This may be greater than totalAllocated if additional tokens are transferred
+     */
+    function getVaultBalance() external view returns (uint256) {
+        return token.balanceOf(address(this));
+    }
+}

@@ -255,7 +255,7 @@ describe("MagicWorldToken", function () {
 
             await expect(
                 token.connect(gameOperator).batchTransfer(recipients, amounts)
-            ).to.be.revertedWith("MWT: Transfer to zero address");
+            ).to.be.revertedWithCustomError(token, "ERC20InvalidReceiver");
         });
 
         it("Should handle zero amount transfers", async function () {

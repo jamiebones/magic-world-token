@@ -84,83 +84,35 @@ class BlockchainService {
         }
     }
 
-    /**
-     * Distribute different amounts to multiple players
-     * @param {Array<string>} recipients - Array of player addresses
-     * @param {Array<string>} amounts - Array of token amounts (in tokens, not wei)
-     * @param {string} reason - Reason for distribution (for logging)
-     * @returns {Promise<Object>} Transaction result
-     */
-    async distributeRewards(recipients, amounts, reason = 'Token Distribution') {
-        this._ensureInitialized();
-        try {
-            // Validate inputs
-            if (!Array.isArray(recipients) || !Array.isArray(amounts)) {
-                throw new Error('Recipients and amounts must be arrays');
-            }
-
-            if (recipients.length !== amounts.length) {
-                throw new Error('Recipients and amounts arrays must have the same length');
-            }
-
-            if (recipients.length === 0) {
-                throw new Error('Cannot distribute to empty recipient list');
-            }
-
-            const maxBatchSize = parseInt(process.env.MAX_BATCH_SIZE) || 200;
-            if (recipients.length > maxBatchSize) {
-                throw new Error(`Batch size ${recipients.length} exceeds maximum ${maxBatchSize}`);
-            }
-
-            // Convert amounts to wei
-            const amountsInWei = amounts.map(amount => ethers.parseEther(amount.toString()));
-
-            // Validate addresses
-            recipients.forEach(address => {
-                if (!ethers.isAddress(address)) {
-                    throw new Error(`Invalid address: ${address}`);
-                }
-            });
-
-            logger.info(`🎁 Distributing tokens to ${recipients.length} players - Reason: ${reason}`);
-
-            // Execute transaction
-            const tx = await this.gameContract.distributeRewards(recipients, amountsInWei, reason);
-
-            logger.info(`📝 Transaction submitted: ${tx.hash}`);
-
-            // Wait for confirmation
-            const receipt = await tx.wait();
-
-            logger.info(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
-
-            return {
-                success: true,
-                transactionHash: tx.hash,
-                blockNumber: receipt.blockNumber,
-                gasUsed: receipt.gasUsed.toString(),
-                recipients: recipients.length,
-                totalAmount: amounts.reduce((sum, amount) => sum + parseFloat(amount), 0).toString(),
-                reason
-            };
-
-        } catch (error) {
-            logger.error('Failed to distribute rewards:', error);
-            throw new Error(`Failed to distribute rewards: ${error.message}`);
-        }
-    }
 
     /**
-     * Distribute equal amounts to multiple players (more gas efficient)
+     * Distribute equal amounts to multiple players from a vault (more gas efficient)
+     * @param {number} vaultType - Vault type (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)
      * @param {Array<string>} recipients - Array of player addresses
      * @param {string} amount - Token amount per player (in tokens, not wei)
      * @param {string} reason - Reason for distribution
      * @returns {Promise<Object>} Transaction result
      */
-    async distributeEqualRewards(recipients, amount, reason = 'Equal Token Distribution') {
+    async distributeEqualFromVault(vaultType, recipients, amount, reason = 'Equal Token Distribution') {
         this._ensureInitialized();
 
         try {
+            // Check gas price before transaction
+            const feeData = await this.provider.getFeeData();
+            const maxGasPrice = ethers.parseUnits(
+                process.env.MAX_GAS_PRICE_GWEI || '50',
+                'gwei'
+            );
+
+            if (feeData.gasPrice > maxGasPrice) {
+                const currentGwei = ethers.formatUnits(feeData.gasPrice, 'gwei');
+                const maxGwei = ethers.formatUnits(maxGasPrice, 'gwei');
+                throw new Error(
+                    `Gas price too high: ${currentGwei} gwei (max allowed: ${maxGwei} gwei). ` +
+                    'Transaction rejected to prevent excessive costs.'
+                );
+            }
+
             // Validate inputs
             if (!Array.isArray(recipients)) {
                 throw new Error('Recipients must be an array');
@@ -168,6 +120,10 @@ class BlockchainService {
 
             if (recipients.length === 0) {
                 throw new Error('Cannot distribute to empty recipient list');
+            }
+
+            if (vaultType < 0 || vaultType > 3) {
+                throw new Error('Invalid vault type. Must be 0-3');
             }
 
             const maxBatchSize = parseInt(process.env.MAX_BATCH_SIZE) || 200;
@@ -185,10 +141,11 @@ class BlockchainService {
                 }
             });
 
-            logger.info(`🎁 Distributing ${amount} tokens each to ${recipients.length} players - Reason: ${reason}`);
+            const vaultNames = ['PLAYER_TASKS', 'SOCIAL_FOLLOWERS', 'SOCIAL_POSTERS', 'ECOSYSTEM_FUND'];
+            logger.info(`🎁 Distributing ${amount} tokens each to ${recipients.length} players from ${vaultNames[vaultType]} vault - Reason: ${reason}`);
 
             // Execute transaction
-            const tx = await this.gameContract.distributeEqualRewards(recipients, amountInWei, reason);
+            const tx = await this.gameContract.distributeEqualFromVault(vaultType, recipients, amountInWei, reason);
 
             logger.info(`📝 Transaction submitted: ${tx.hash}`);
 
@@ -207,6 +164,8 @@ class BlockchainService {
                 recipients: recipients.length,
                 amountPerPlayer: amount,
                 totalAmount,
+                vaultType,
+                vaultName: vaultNames[vaultType],
                 reason
             };
 
@@ -217,10 +176,98 @@ class BlockchainService {
     }
 
     /**
-     * Get player statistics
-     * @param {string} playerAddress - Player's wallet address
-     * @returns {Promise<Object>} Player stats
+     * Distribute different amounts to multiple players from a vault
+     * @param {number} vaultType - Vault type (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)
+     * @param {Array<string>} recipients - Array of player addresses
+     * @param {Array<string>} amounts - Array of token amounts per player (in tokens, not wei)
+     * @param {string} reason - Reason for distribution
+     * @returns {Promise<Object>} Transaction result
      */
+    async distributeFromVault(vaultType, recipients, amounts, reason = 'Token Distribution') {
+        this._ensureInitialized();
+
+        try {
+            // Check gas price before transaction
+            const feeData = await this.provider.getFeeData();
+            const maxGasPrice = ethers.parseUnits(
+                process.env.MAX_GAS_PRICE_GWEI || '50',
+                'gwei'
+            );
+
+            if (feeData.gasPrice > maxGasPrice) {
+                const currentGwei = ethers.formatUnits(feeData.gasPrice, 'gwei');
+                const maxGwei = ethers.formatUnits(maxGasPrice, 'gwei');
+                throw new Error(
+                    `Gas price too high: ${currentGwei} gwei (max allowed: ${maxGwei} gwei). ` +
+                    'Transaction rejected to prevent excessive costs.'
+                );
+            }
+
+            // Validate inputs
+            if (!Array.isArray(recipients) || !Array.isArray(amounts)) {
+                throw new Error('Recipients and amounts must be arrays');
+            }
+
+            if (recipients.length === 0 || amounts.length === 0) {
+                throw new Error('Cannot distribute to empty recipient/amount list');
+            }
+
+            if (recipients.length !== amounts.length) {
+                throw new Error('Recipients and amounts arrays must have the same length');
+            }
+
+            if (vaultType < 0 || vaultType > 3) {
+                throw new Error('Invalid vault type. Must be 0-3');
+            }
+
+            const maxBatchSize = parseInt(process.env.MAX_BATCH_SIZE) || 200;
+            if (recipients.length > maxBatchSize) {
+                throw new Error(`Batch size ${recipients.length} exceeds maximum ${maxBatchSize}`);
+            }
+
+            // Convert amounts to wei
+            const amountsInWei = amounts.map(amount => ethers.parseEther(amount.toString()));
+
+            // Validate addresses
+            recipients.forEach(address => {
+                if (!ethers.isAddress(address)) {
+                    throw new Error(`Invalid address: ${address}`);
+                }
+            });
+
+            const vaultNames = ['PLAYER_TASKS', 'SOCIAL_FOLLOWERS', 'SOCIAL_POSTERS', 'ECOSYSTEM_FUND'];
+            const totalAmount = amounts.reduce((sum, amount) => sum + parseFloat(amount), 0);
+
+            logger.info(`🎁 Distributing different amounts to ${recipients.length} players from ${vaultNames[vaultType]} vault - Total: ${totalAmount} tokens - Reason: ${reason}`);
+
+            // Execute transaction
+            const tx = await this.gameContract.distributeFromVault(vaultType, recipients, amountsInWei, reason);
+
+            logger.info(`📝 Transaction submitted: ${tx.hash}`);
+
+            // Wait for confirmation
+            const receipt = await tx.wait();
+
+            logger.info(`✅ Transaction confirmed in block ${receipt.blockNumber}`);
+
+            return {
+                success: true,
+                transactionHash: tx.hash,
+                blockNumber: receipt.blockNumber,
+                gasUsed: receipt.gasUsed.toString(),
+                recipients: recipients.length,
+                amounts,
+                totalAmount: totalAmount.toString(),
+                vaultType,
+                vaultName: vaultNames[vaultType],
+                reason
+            };
+
+        } catch (error) {
+            logger.error('Failed to distribute from vault:', error);
+            throw new Error(`Failed to distribute from vault: ${error.message}`);
+        }
+    }
     async getPlayerStats(playerAddress) {
         this._ensureInitialized();
 
@@ -307,10 +354,10 @@ class BlockchainService {
         try {
             let gasEstimate;
 
-            if (method === 'distributeRewards') {
-                gasEstimate = await this.gameContract.distributeRewards.estimateGas(...params);
-            } else if (method === 'distributeEqualRewards') {
-                gasEstimate = await this.gameContract.distributeEqualRewards.estimateGas(...params);
+            if (method === 'distributeEqualFromVault') {
+                gasEstimate = await this.gameContract.distributeEqualFromVault.estimateGas(...params);
+            } else if (method === 'distributeFromVault') {
+                gasEstimate = await this.gameContract.distributeFromVault.estimateGas(...params);
             } else {
                 throw new Error(`Unknown method: ${method}`);
             }

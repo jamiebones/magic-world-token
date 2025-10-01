@@ -3,6 +3,7 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
+const crypto = require('crypto');
 require('dotenv').config();
 
 const logger = require('./utils/logger');
@@ -13,6 +14,7 @@ const { authMiddleware } = require('./middleware/auth');
 const tokenRoutes = require('./routes/tokens');
 const playerRoutes = require('./routes/players');
 const healthRoutes = require('./routes/health');
+const adminRoutes = require('./routes/admin');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -35,6 +37,13 @@ const limiter = rateLimit({
 
 app.use(limiter);
 
+// Request ID middleware - Generate unique ID for each request
+app.use((req, res, next) => {
+    req.id = crypto.randomUUID();
+    res.setHeader('X-Request-ID', req.id);
+    next();
+});
+
 // Logging middleware
 app.use(morgan('combined', { stream: { write: message => logger.info(message.trim()) } }));
 
@@ -52,6 +61,9 @@ if (process.env.NODE_ENV !== 'production') {
 // Health check (no auth required)
 app.use('/health', healthRoutes);
 
+// Admin routes (require admin secret header)
+app.use('/api/admin', adminRoutes);
+
 // API routes (require authentication)
 app.use('/api/tokens', authMiddleware, tokenRoutes);
 app.use('/api/players', authMiddleware, playerRoutes);
@@ -65,6 +77,7 @@ app.get('/', (req, res) => {
         documentation: process.env.NODE_ENV !== 'production' ? '/api-docs' : 'Contact admin for documentation',
         endpoints: {
             health: '/health',
+            admin: '/api/admin',
             tokens: '/api/tokens',
             players: '/api/players'
         }
@@ -79,7 +92,7 @@ app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         message: `Cannot ${req.method} ${req.originalUrl}`,
-        availableEndpoints: ['/health', '/api/tokens', '/api/players']
+        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players']
     });
 });
 

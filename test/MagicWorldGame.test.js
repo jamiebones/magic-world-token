@@ -33,6 +33,10 @@ describe("MagicWorldGame", function () {
         // Transfer all tokens to game contract
         await token.transfer(await game.getAddress(), TOTAL_SUPPLY);
 
+        // Initialize vaults with 10% partner allocation
+        const partnerAllocation = TOTAL_SUPPLY / 10n; // 10% of total supply
+        await game.initializeVaults(TOTAL_SUPPLY, partnerAllocation);
+
         // Grant GAME_OPERATOR_ROLE to game contract
         const GAME_OPERATOR_ROLE = await token.GAME_OPERATOR_ROLE();
         await token.grantRole(GAME_OPERATOR_ROLE, await game.getAddress());
@@ -109,73 +113,16 @@ describe("MagicWorldGame", function () {
     });
 
     describe("Reward Distribution", function () {
-        describe("distributeRewards", function () {
-            it("Should distribute different amounts to multiple players", async function () {
-                const recipients = [player1.address, player2.address, player3.address];
-                const amounts = [
-                    ethers.parseEther("100"),
-                    ethers.parseEther("200"),
-                    ethers.parseEther("300")
-                ];
-
-                await expect(
-                    game.connect(distributor).distributeRewards(recipients, amounts, "Daily Login Bonus")
-                )
-                    .to.emit(game, "RewardsDistributed")
-                    .withArgs(distributor.address, recipients, amounts, "Daily Login Bonus");
-
-                expect(await token.balanceOf(player1.address)).to.equal(ethers.parseEther("100"));
-                expect(await token.balanceOf(player2.address)).to.equal(ethers.parseEther("200"));
-                expect(await token.balanceOf(player3.address)).to.equal(ethers.parseEther("300"));
-            });
-
-            it("Should update player statistics", async function () {
-                const amount = ethers.parseEther("150");
-                await game.connect(distributor).distributeRewards([player1.address], [amount], "Achievement");
-
-                const [dailyReceived, totalEarned, lastReward] = await game.getPlayerStats(player1.address);
-                expect(dailyReceived).to.equal(amount);
-                expect(totalEarned).to.equal(amount);
-                expect(lastReward).to.be.greaterThan(0);
-            });
-
-            it("Should enforce daily limits", async function () {
-                const dailyLimit = await game.dailyRewardLimit();
-                const amount = dailyLimit + ethers.parseEther("1");
-
-                await expect(
-                    game.connect(distributor).distributeRewards([player1.address], [amount], "Excessive Reward")
-                ).to.be.revertedWith("MWG: Daily limit exceeded");
-            });
-
-            it("Should reset daily limits on new day", async function () {
-                // This test would require time manipulation in a real scenario
-                // For now, we test the logic with multiple smaller rewards
-                const halfLimit = ethers.parseEther("500");
-
-                await game.connect(distributor).distributeRewards([player1.address], [halfLimit], "First Reward");
-                await game.connect(distributor).distributeRewards([player1.address], [halfLimit], "Second Reward");
-
-                const [dailyReceived] = await game.getPlayerStats(player1.address);
-                expect(dailyReceived).to.equal(ethers.parseEther("1000"));
-            });
-
-            it("Should revert if called by non-distributor", async function () {
-                await expect(
-                    game.connect(player1).distributeRewards([player2.address], [ethers.parseEther("100")], "Unauthorized")
-                ).to.be.reverted;
-            });
-        });
-
-        describe("distributeEqualRewards", function () {
-            it("Should distribute equal amounts to multiple players", async function () {
+        describe("distributeEqualFromVault", function () {
+            it("Should distribute equal amounts to multiple players from vault", async function () {
                 const recipients = [player1.address, player2.address, player3.address];
                 const amount = ethers.parseEther("150");
+                const vaultType = 0; // PLAYER_TASKS
 
                 await expect(
-                    game.connect(distributor).distributeEqualRewards(recipients, amount, "Tournament Prize")
+                    game.connect(distributor).distributeEqualFromVault(vaultType, recipients, amount, "Tournament Prize")
                 )
-                    .to.emit(game, "RewardsDistributed");
+                    .to.emit(game, "VaultDistributed");
 
                 expect(await token.balanceOf(player1.address)).to.equal(amount);
                 expect(await token.balanceOf(player2.address)).to.equal(amount);
@@ -185,18 +132,31 @@ describe("MagicWorldGame", function () {
             it("Should enforce batch size limits", async function () {
                 const recipients = new Array(201).fill(player1.address);
                 const amount = ethers.parseEther("1");
+                const vaultType = 0; // PLAYER_TASKS
 
                 await expect(
-                    game.connect(distributor).distributeEqualRewards(recipients, amount, "Too Many Recipients")
+                    game.connect(distributor).distributeEqualFromVault(vaultType, recipients, amount, "Too Many Recipients")
                 ).to.be.revertedWith("MWG: Batch too large");
+            });
+
+            it("Should reject distribution exceeding vault balance", async function () {
+                const vaultType = 0; // PLAYER_TASKS
+                const vault = await game.vaults(vaultType);
+                const excessiveAmount = (vault.remaining / 2n) + ethers.parseEther("1");
+
+                const recipients = [player1.address, player2.address];
+
+                await expect(
+                    game.connect(distributor).distributeEqualFromVault(vaultType, recipients, excessiveAmount, "Excessive")
+                ).to.be.revertedWith("MWG: Insufficient vault balance");
             });
         });
     });
 
     describe("Token Burning", function () {
         beforeEach(async function () {
-            // Give player1 some tokens first
-            await game.connect(distributor).distributeRewards([player1.address], [ethers.parseEther("1000")], "Setup");
+            // Give player1 some tokens first using vault distribution
+            await game.connect(distributor).distributeEqualFromVault(0, [player1.address], ethers.parseEther("1000"), "Setup");
         });
 
         it("Should allow players to burn tokens for purchases", async function () {
@@ -214,6 +174,7 @@ describe("MagicWorldGame", function () {
 
             // Tokens should be transferred to game contract (burned)
             expect(await token.balanceOf(player1.address)).to.equal(ethers.parseEther("900"));
+            expect(await token.balanceOf(await game.getAddress())).to.equal(TOTAL_SUPPLY - ethers.parseEther("900"));
         });
 
         it("Should revert if insufficient balance", async function () {
@@ -288,7 +249,7 @@ describe("MagicWorldGame", function () {
                 await game.connect(gameAdmin).pause();
 
                 await expect(
-                    game.connect(distributor).distributeRewards([player1.address], [ethers.parseEther("100")], "Test")
+                    game.connect(distributor).distributeEqualFromVault(0, [player1.address], ethers.parseEther("100"), "Test")
                 ).to.be.revertedWithCustomError(game, "EnforcedPause");
             });
         });
@@ -350,10 +311,11 @@ describe("MagicWorldGame", function () {
 
     describe("Statistics and Tracking", function () {
         beforeEach(async function () {
-            // Distribute some rewards for testing
-            await game.connect(distributor).distributeRewards(
+            // Distribute some rewards for testing using vault
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [player1.address, player2.address],
-                [ethers.parseEther("100"), ethers.parseEther("200")],
+                ethers.parseEther("150"),
                 "Setup Rewards"
             );
         });
@@ -369,18 +331,19 @@ describe("MagicWorldGame", function () {
         it("Should track player statistics correctly", async function () {
             const [dailyReceived, totalEarned, lastReward] = await game.getPlayerStats(player1.address);
 
-            expect(dailyReceived).to.equal(ethers.parseEther("100"));
-            expect(totalEarned).to.equal(ethers.parseEther("100"));
+            expect(dailyReceived).to.equal(ethers.parseEther("150"));
+            expect(totalEarned).to.equal(ethers.parseEther("150"));
             expect(lastReward).to.be.greaterThan(0);
         });
     });
 
     describe("Integration", function () {
         it("Should work end-to-end: distribute rewards, burn tokens, track stats", async function () {
-            // Distribute rewards
-            await game.connect(distributor).distributeRewards(
+            // Distribute rewards using vault
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [player1.address],
-                [ethers.parseEther("500")],
+                ethers.parseEther("500"),
                 "Quest Completion"
             );
 
@@ -397,6 +360,116 @@ describe("MagicWorldGame", function () {
             const [totalDistributed, playersCount] = await game.getContractStats();
             expect(totalDistributed).to.equal(ethers.parseEther("500"));
             expect(playersCount).to.equal(1);
+        });
+    });
+});
+
+describe("MagicWorldGame - Vault Initialization", function () {
+    let MagicWorldToken;
+    let MagicWorldGame;
+    let token;
+    let game;
+    let owner;
+    let distributor;
+
+    const TOKEN_NAME = "Magic World Token";
+    const TOKEN_SYMBOL = "MWT";
+    const TOTAL_SUPPLY = ethers.parseEther("1000000000"); // 1 billion tokens
+
+    beforeEach(async function () {
+        [owner, , distributor] = await ethers.getSigners();
+
+        // Deploy Token Contract
+        MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
+        token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
+        await token.waitForDeployment();
+
+        // Deploy Game Contract
+        MagicWorldGame = await ethers.getContractFactory("MagicWorldGame");
+        game = await MagicWorldGame.deploy(await token.getAddress());
+        await game.waitForDeployment();
+
+        // Transfer all tokens to game contract
+        await token.transfer(await game.getAddress(), TOTAL_SUPPLY);
+
+        // Grant GAME_OPERATOR_ROLE to game contract
+        const GAME_OPERATOR_ROLE = await token.GAME_OPERATOR_ROLE();
+        await token.grantRole(GAME_OPERATOR_ROLE, await game.getAddress());
+
+        // Set up distributor role
+        const REWARD_DISTRIBUTOR_ROLE = await game.REWARD_DISTRIBUTOR_ROLE();
+        await game.grantRole(REWARD_DISTRIBUTOR_ROLE, distributor.address);
+    });
+
+    describe("Vault Initialization", function () {
+        it("Should initialize vaults correctly", async function () {
+            const partnerAllocation = TOTAL_SUPPLY / 10n; // 10% of total supply
+
+            expect(await game.vaultsInitialized()).to.be.false;
+
+            await expect(game.initializeVaults(TOTAL_SUPPLY, partnerAllocation))
+                .to.emit(game, "VaultsInitialized")
+                .withArgs(TOTAL_SUPPLY, partnerAllocation);
+
+            expect(await game.vaultsInitialized()).to.be.true;
+
+            // Check vault allocations
+            const remainingSupply = TOTAL_SUPPLY - partnerAllocation;
+            const playerTasksVault = await game.vaults(0); // PLAYER_TASKS
+            const socialFollowersVault = await game.vaults(1); // SOCIAL_FOLLOWERS
+            const socialPostersVault = await game.vaults(2); // SOCIAL_POSTERS
+            const ecosystemFundVault = await game.vaults(3); // ECOSYSTEM_FUND
+
+            expect(playerTasksVault.totalAllocated).to.equal(remainingSupply * 50n / 100n);
+            expect(socialFollowersVault.totalAllocated).to.equal(remainingSupply * 5n / 100n);
+            expect(socialPostersVault.totalAllocated).to.equal(remainingSupply * 15n / 100n);
+            expect(ecosystemFundVault.totalAllocated).to.equal(remainingSupply * 30n / 100n);
+        });
+
+        it("Should prevent multiple vault initializations", async function () {
+            const partnerAllocation = TOTAL_SUPPLY / 10n;
+
+            // First initialization should succeed
+            await game.initializeVaults(TOTAL_SUPPLY, partnerAllocation);
+            expect(await game.vaultsInitialized()).to.be.true;
+
+            // Second initialization should fail
+            await expect(
+                game.initializeVaults(TOTAL_SUPPLY, partnerAllocation)
+            ).to.be.revertedWith("MWG: Vaults already initialized");
+        });
+
+        it("Should only allow admin to initialize vaults", async function () {
+            const partnerAllocation = TOTAL_SUPPLY / 10n;
+
+            await expect(
+                game.connect(distributor).initializeVaults(TOTAL_SUPPLY, partnerAllocation)
+            ).to.be.revertedWithCustomError(game, "AccessControlUnauthorizedAccount");
+        });
+
+        it("Should require vaults to be initialized before distribution", async function () {
+            // Try to distribute without initializing vaults
+            await expect(
+                game.connect(distributor).distributeEqualFromVault(0, [distributor.address], ethers.parseEther("100"), "Test")
+            ).to.be.revertedWith("MWG: Vaults not initialized");
+
+            await expect(
+                game.connect(distributor).distributeFromVault(0, [distributor.address], [ethers.parseEther("100")], "Test")
+            ).to.be.revertedWith("MWG: Vaults not initialized");
+
+            await expect(
+                game.connect(distributor).distributeEqualFromVault(0, [distributor.address], ethers.parseEther("100"), "Test")
+            ).to.be.revertedWith("MWG: Vaults not initialized");
+        });
+
+        it("Should allow distribution after vaults are initialized", async function () {
+            const partnerAllocation = TOTAL_SUPPLY / 10n;
+            await game.initializeVaults(TOTAL_SUPPLY, partnerAllocation);
+
+            // Now distribution should work
+            await expect(
+                game.connect(distributor).distributeEqualFromVault(0, [distributor.address], ethers.parseEther("100"), "Test")
+            ).to.emit(game, "VaultDistributed");
         });
     });
 });

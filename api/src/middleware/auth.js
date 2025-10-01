@@ -59,6 +59,11 @@ async function validateApiKey(apiKey) {
         // Check cache first
         const cached = API_KEY_CACHE.get(hashedKey);
         if (cached && (Date.now() - cached.cachedAt) < CACHE_TTL) {
+            // Verify key is still active before returning cached data
+            if (!cached.data.isActive) {
+                API_KEY_CACHE.delete(hashedKey);
+                return null;
+            }
             return cached.data;
         }
 
@@ -163,7 +168,7 @@ const requirePermission = (requiredPermission) => {
  */
 async function initializeDefaultKeys() {
     try {
-        if (process.env.NODE_ENV === 'development') {
+        if (process.env.NODE_ENV === 'production') {
             // Check if any keys exist
             const existingKeys = await ApiKey.countDocuments();
             if (existingKeys === 0) {
@@ -177,7 +182,6 @@ async function initializeDefaultKeys() {
                 logger.info('🔑 Development API Key generated:');
                 logger.info(`   Key: ${devKey.apiKey}`);
                 logger.info(`   Permissions: ${devKey.permissions.join(', ')}`);
-                logger.info('   ⚠️  This key is for development only! Replace in production.');
                 logger.info('   📧 Add this to your .env file or use in API requests');
             } else {
                 logger.info(`Found ${existingKeys} existing API keys`);

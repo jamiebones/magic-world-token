@@ -26,10 +26,56 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     bytes32 public constant REWARD_DISTRIBUTOR_ROLE =
         keccak256("REWARD_DISTRIBUTOR_ROLE");
 
+    // Constants for time calculations
+    uint256 private constant SECONDS_PER_HOUR = 3600;
+    uint256 private constant SECONDS_PER_DAY = 86400;
+    uint256 private constant DAYS_PER_YEAR = 365;
+
+    // Constants for percentage calculations
+    uint256 private constant PERCENTAGE_BASE = 100;
+    uint256 private constant PLAYER_TASKS_PERCENT = 50;
+    uint256 private constant SOCIAL_FOLLOWERS_PERCENT = 5;
+    uint256 private constant SOCIAL_POSTERS_PERCENT = 15;
+    uint256 private constant ECOSYSTEM_FUND_PERCENT = 30;
+
+    // Constants for limits
+    uint256 private constant MAX_BATCH_SIZE_LIMIT = 500;
+    uint256 private constant MIN_COOLDOWN_PERIOD = 60; // 1 minute
+    uint256 private constant MAX_COOLDOWN_PERIOD = 7 * SECONDS_PER_DAY; // 7 days
+    uint256 private constant MIN_DAILY_LIMIT = 1 * 10 ** 18; // 1 token minimum
+    uint256 private constant COOLDOWN_THRESHOLD = 100 * 10 ** 18; // 100 tokens
+
+    /**
+     * @dev Modifier to ensure vaults are initialized before distribution
+     */
+    modifier vaultsInitializedRequired() {
+        require(vaultsInitialized, "MWG: Vaults not initialized");
+        _;
+    }
+
+    // Vault system for token allocation management
+    enum AllocationType {
+        PLAYER_TASKS, // 50% - Gameplay rewards
+        SOCIAL_FOLLOWERS, // 5% - Community engagement
+        SOCIAL_POSTERS, // 15% - Content creation
+        ECOSYSTEM_FUND // 30% - Development & operations
+    }
+
+    struct AllocationVault {
+        uint256 totalAllocated;
+        uint256 spent;
+        uint256 remaining;
+    }
+
+    mapping(AllocationType => AllocationVault) public vaults;
+
+    // Vault initialization tracking
+    bool public vaultsInitialized;
+
     // Rate limiting and anti-abuse
     uint256 public dailyRewardLimit = 1000 * 10 ** 18; // 1000 tokens per day per player
     uint256 public maxBatchSize = 200;
-    uint256 public cooldownPeriod = 1 hours; // Minimum time between major rewards
+    uint256 public cooldownPeriod = SECONDS_PER_HOUR; // 1 hour minimum time between major rewards
 
     // Player tracking
     mapping(address => uint256) public dailyRewardsReceived;
@@ -49,7 +95,14 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         uint256[] amounts,
         string reason
     );
-
+    event VaultDistributed(
+        address indexed distributor,
+        AllocationType vaultType,
+        address[] recipients,
+        uint256[] amounts,
+        string reason
+    );
+    event VaultsInitialized(uint256 totalSupply, uint256 partnerAllocation);
     event DailyLimitUpdated(uint256 oldLimit, uint256 newLimit);
     event MaxBatchSizeUpdated(uint256 oldSize, uint256 newSize);
     event CooldownPeriodUpdated(uint256 oldPeriod, uint256 newPeriod);
@@ -59,10 +112,23 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         address indexed previousAdmin,
         address indexed newAdmin
     );
+    event DailyLimitExhausted(
+        address indexed player,
+        uint256 attemptedAmount,
+        uint256 currentReceived,
+        uint256 dailyLimit
+    );
 
     /**
      * @dev Constructor sets up the game contract with token reference
      * @param _tokenAddress Address of the Magic World Token contract
+     *
+     * Requirements:
+     * - Token address must not be zero
+     *
+     * Effects:
+     * - Grants DEFAULT_ADMIN_ROLE, GAME_ADMIN_ROLE, and REWARD_DISTRIBUTOR_ROLE to deployer
+     * - Initializes currentDay based on block.timestamp
      */
     constructor(address _tokenAddress) {
         require(_tokenAddress != address(0), "MWG: Invalid token address");
@@ -75,26 +141,121 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         _grantRole(REWARD_DISTRIBUTOR_ROLE, _msgSender());
 
         // Initialize current day
-        currentDay = block.timestamp / 1 days;
+        currentDay = block.timestamp / SECONDS_PER_DAY;
     }
 
     /**
-     * @dev Distribute rewards to multiple players
+     * @dev Initialize token allocation vaults
+     * @param totalSupply Total token supply
+     * @param partnerAllocation Amount allocated to partners (10%)
+     *
+     * Requirements:
+     * - Caller must have DEFAULT_ADMIN_ROLE
+     * - Vaults must not be already initialized
+     * - Total supply must be greater than zero
+     * - Partner allocation must not exceed total supply
+     *
+     * Vault Allocations (of remaining supply after partner allocation):
+     * - Player Tasks: 50%
+     * - Social Followers: 5%
+     * - Social Posters: 15%
+     * - Ecosystem Fund: 30% (calculated as remainder to avoid rounding errors)
+     *
+     * Emits a {VaultsInitialized} event
+     */
+    function initializeVaults(
+        uint256 totalSupply,
+        uint256 partnerAllocation
+    ) external onlyRole(DEFAULT_ADMIN_ROLE) {
+        require(!vaultsInitialized, "MWG: Vaults already initialized");
+        require(totalSupply > 0, "MWG: Invalid total supply");
+        require(
+            partnerAllocation <= totalSupply,
+            "MWG: Partner allocation too large"
+        );
+
+        uint256 remainingSupply = totalSupply - partnerAllocation;
+
+        // Calculate vault allocations using integer division
+        // Assign remainder to last vault to avoid rounding errors
+        uint256 playerTasksAmount = (remainingSupply * PLAYER_TASKS_PERCENT) /
+            PERCENTAGE_BASE;
+        uint256 socialFollowersAmount = (remainingSupply *
+            SOCIAL_FOLLOWERS_PERCENT) / PERCENTAGE_BASE;
+        uint256 socialPostersAmount = (remainingSupply *
+            SOCIAL_POSTERS_PERCENT) / PERCENTAGE_BASE;
+
+        // Calculate ecosystem fund as remainder to ensure all tokens are allocated
+        uint256 ecosystemFundAmount = remainingSupply -
+            playerTasksAmount -
+            socialFollowersAmount -
+            socialPostersAmount;
+
+        // Initialize vaults with calculated amounts
+        vaults[AllocationType.PLAYER_TASKS] = AllocationVault({
+            totalAllocated: playerTasksAmount,
+            spent: 0,
+            remaining: playerTasksAmount
+        });
+
+        vaults[AllocationType.SOCIAL_FOLLOWERS] = AllocationVault({
+            totalAllocated: socialFollowersAmount,
+            spent: 0,
+            remaining: socialFollowersAmount
+        });
+
+        vaults[AllocationType.SOCIAL_POSTERS] = AllocationVault({
+            totalAllocated: socialPostersAmount,
+            spent: 0,
+            remaining: socialPostersAmount
+        });
+
+        vaults[AllocationType.ECOSYSTEM_FUND] = AllocationVault({
+            totalAllocated: ecosystemFundAmount,
+            spent: 0,
+            remaining: ecosystemFundAmount
+        });
+
+        vaultsInitialized = true;
+
+        emit VaultsInitialized(totalSupply, partnerAllocation);
+    }
+
+    /**
+     * @dev Distribute rewards from a specific vault
+     * @param vaultType Type of allocation vault to use
      * @param recipients Array of player addresses
      * @param amounts Array of reward amounts
      * @param reason Reason for the reward distribution
      */
-    function distributeRewards(
+    function distributeFromVault(
+        AllocationType vaultType,
         address[] calldata recipients,
         uint256[] calldata amounts,
         string calldata reason
-    ) external onlyRole(REWARD_DISTRIBUTOR_ROLE) whenNotPaused nonReentrant {
+    )
+        external
+        onlyRole(REWARD_DISTRIBUTOR_ROLE)
+        whenNotPaused
+        nonReentrant
+        vaultsInitializedRequired
+    {
         require(
             recipients.length == amounts.length,
             "MWG: Array length mismatch"
         );
         require(recipients.length > 0, "MWG: Empty arrays");
         require(recipients.length <= maxBatchSize, "MWG: Batch too large");
+
+        // Check vault balance
+        uint256 totalAmount = 0;
+        for (uint256 i = 0; i < amounts.length; i++) {
+            totalAmount += amounts[i];
+        }
+        require(
+            vaults[vaultType].remaining >= totalAmount,
+            "MWG: Insufficient vault balance"
+        );
 
         _updateCurrentDay();
 
@@ -112,26 +273,50 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
             _updatePlayerStats(recipient, amount);
         }
 
+        // Deduct from vault
+        vaults[vaultType].spent += totalAmount;
+        vaults[vaultType].remaining -= totalAmount;
+
         // Use batch transfer for efficiency
         magicWorldToken.batchTransfer(recipients, amounts);
 
-        emit RewardsDistributed(_msgSender(), recipients, amounts, reason);
+        emit VaultDistributed(
+            _msgSender(),
+            vaultType,
+            recipients,
+            amounts,
+            reason
+        );
     }
 
     /**
-     * @dev Distribute equal rewards to multiple players
+     * @dev Distribute equal rewards from a specific vault
+     * @param vaultType Type of allocation vault to use
      * @param recipients Array of player addresses
      * @param amount Amount to give each player
      * @param reason Reason for the reward distribution
      */
-    function distributeEqualRewards(
+    function distributeEqualFromVault(
+        AllocationType vaultType,
         address[] calldata recipients,
         uint256 amount,
         string calldata reason
-    ) external onlyRole(REWARD_DISTRIBUTOR_ROLE) whenNotPaused nonReentrant {
+    )
+        external
+        onlyRole(REWARD_DISTRIBUTOR_ROLE)
+        whenNotPaused
+        nonReentrant
+        vaultsInitializedRequired
+    {
         require(recipients.length > 0, "MWG: Empty recipients");
         require(recipients.length <= maxBatchSize, "MWG: Batch too large");
         require(amount > 0, "MWG: Zero amount");
+
+        uint256 totalAmount = recipients.length * amount;
+        require(
+            vaults[vaultType].remaining >= totalAmount,
+            "MWG: Insufficient vault balance"
+        );
 
         _updateCurrentDay();
 
@@ -151,10 +336,20 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
             amounts[i] = amount;
         }
 
+        // Deduct from vault
+        vaults[vaultType].spent += totalAmount;
+        vaults[vaultType].remaining -= totalAmount;
+
         // Use batch transfer equal for gas efficiency
         magicWorldToken.batchTransferEqual(recipients, amount);
 
-        emit RewardsDistributed(_msgSender(), recipients, amounts, reason);
+        emit VaultDistributed(
+            _msgSender(),
+            vaultType,
+            recipients,
+            amounts,
+            reason
+        );
     }
 
     /**
@@ -181,11 +376,17 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     /**
      * @dev Update daily reward limit (admin only)
      * @param newLimit New daily limit per player
+     *
+     * Requirements:
+     * - Caller must have GAME_ADMIN_ROLE
+     * - New limit must be at least MIN_DAILY_LIMIT (1 token)
+     *
+     * Emits a {DailyLimitUpdated} event
      */
     function setDailyRewardLimit(
         uint256 newLimit
     ) external onlyRole(GAME_ADMIN_ROLE) {
-        require(newLimit > 0, "MWG: Invalid limit");
+        require(newLimit >= MIN_DAILY_LIMIT, "MWG: Daily limit too low");
         uint256 oldLimit = dailyRewardLimit;
         dailyRewardLimit = newLimit;
         emit DailyLimitUpdated(oldLimit, newLimit);
@@ -194,11 +395,22 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     /**
      * @dev Update maximum batch size (admin only)
      * @param newSize New maximum batch size
+     *
+     * Requirements:
+     * - Caller must have GAME_ADMIN_ROLE
+     * - New size must be greater than 0
+     * - New size must not exceed MAX_BATCH_SIZE_LIMIT (500)
+     *
+     * Emits a {MaxBatchSizeUpdated} event
      */
     function setMaxBatchSize(
         uint256 newSize
     ) external onlyRole(GAME_ADMIN_ROLE) {
-        require(newSize > 0 && newSize <= 500, "MWG: Invalid batch size");
+        require(newSize > 0, "MWG: Batch size must be positive");
+        require(
+            newSize <= MAX_BATCH_SIZE_LIMIT,
+            "MWG: Batch size exceeds maximum"
+        );
         uint256 oldSize = maxBatchSize;
         maxBatchSize = newSize;
         emit MaxBatchSizeUpdated(oldSize, newSize);
@@ -207,10 +419,19 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     /**
      * @dev Update cooldown period (admin only)
      * @param newPeriod New cooldown period in seconds
+     *
+     * Requirements:
+     * - Caller must have GAME_ADMIN_ROLE
+     * - New period must be at least MIN_COOLDOWN_PERIOD (1 minute)
+     * - New period must not exceed MAX_COOLDOWN_PERIOD (7 days)
+     *
+     * Emits a {CooldownPeriodUpdated} event
      */
     function setCooldownPeriod(
         uint256 newPeriod
     ) external onlyRole(GAME_ADMIN_ROLE) {
+        require(newPeriod >= MIN_COOLDOWN_PERIOD, "MWG: Cooldown too short");
+        require(newPeriod <= MAX_COOLDOWN_PERIOD, "MWG: Cooldown too long");
         uint256 oldPeriod = cooldownPeriod;
         cooldownPeriod = newPeriod;
         emit CooldownPeriodUpdated(oldPeriod, newPeriod);
@@ -291,7 +512,58 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Internal function to check daily limits
+     * @dev Get vault information
+     * @param vaultType Type of allocation vault
+     * @return totalAllocated Total tokens allocated to vault
+     * @return spent Amount spent from vault
+     * @return remaining Amount remaining in vault
+     */
+    function getVaultInfo(
+        AllocationType vaultType
+    )
+        external
+        view
+        returns (uint256 totalAllocated, uint256 spent, uint256 remaining)
+    {
+        AllocationVault memory vault = vaults[vaultType];
+        return (vault.totalAllocated, vault.spent, vault.remaining);
+    }
+
+    /**
+     * @dev Get all vault statistics
+     * @return playerTasks Vault info for player tasks
+     * @return socialFollowers Vault info for social followers
+     * @return socialPosters Vault info for social posters
+     * @return ecosystemFund Vault info for ecosystem fund
+     */
+    function getAllVaultStats()
+        external
+        view
+        returns (
+            AllocationVault memory playerTasks,
+            AllocationVault memory socialFollowers,
+            AllocationVault memory socialPosters,
+            AllocationVault memory ecosystemFund
+        )
+    {
+        return (
+            vaults[AllocationType.PLAYER_TASKS],
+            vaults[AllocationType.SOCIAL_FOLLOWERS],
+            vaults[AllocationType.SOCIAL_POSTERS],
+            vaults[AllocationType.ECOSYSTEM_FUND]
+        );
+    }
+
+    /**
+     * @dev Internal function to check daily limits and cooldown period
+     * @param recipient Address of the reward recipient
+     * @param amount Amount of tokens to be distributed
+     *
+     * Requirements:
+     * - Recipient's daily received amount plus new amount must not exceed dailyRewardLimit
+     * - For rewards >= COOLDOWN_THRESHOLD, cooldown period must have elapsed since last major reward
+     *
+     * Note: DailyLimitExhausted event is emitted by caller if this check fails
      */
     function _checkDailyLimit(address recipient, uint256 amount) internal view {
         uint256 todayReceived = (lastRewardDate[recipient] == currentDay)
@@ -302,6 +574,14 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
             todayReceived + amount <= dailyRewardLimit,
             "MWG: Daily limit exceeded"
         );
+
+        // Enforce cooldown period for major rewards
+        if (amount >= COOLDOWN_THRESHOLD) {
+            require(
+                block.timestamp >= lastMajorReward[recipient] + cooldownPeriod,
+                "MWG: Cooldown period not elapsed"
+            );
+        }
     }
 
     /**
@@ -328,10 +608,13 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     }
 
     /**
-     * @dev Internal function to update current day
+     * @dev Internal function to update current day based on block timestamp
+     *
+     * Effects:
+     * - Updates currentDay if a new day has started
      */
     function _updateCurrentDay() internal {
-        uint256 today = block.timestamp / 1 days;
+        uint256 today = block.timestamp / SECONDS_PER_DAY;
         if (today > currentDay) {
             currentDay = today;
         }

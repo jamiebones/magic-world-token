@@ -137,6 +137,182 @@ GET /api/tokens/transaction/0x1234567890abcdef...
 X-API-Key: your-api-key
 ```
 
+## 🔐 Admin Endpoints
+
+Admin endpoints require special authentication using an admin secret hash. These endpoints are used to manage API keys for game servers and applications.
+
+### Admin Authentication
+
+Admin endpoints use header-based authentication with a pre-hashed admin secret:
+
+```
+X-Admin-Secret: your-admin-secret-here
+```
+
+**Setting up Admin Authentication:**
+
+1. **Configure Environment:**
+   ```bash
+   # In your .env file
+   ADMIN_SECRET_HASH=your-generated-hash-here
+   ADMIN_SECRET_SALT=optional-salt-for-extra-security
+   ```
+
+### Generate API Keys via API
+
+**Using curl:**
+```bash
+# Generate a basic API key for token distribution
+curl -X POST http://localhost:3000/api/admin/generate-key \
+  -H "X-Admin-Secret: your-admin-secret-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Game Server Key",
+    "permissions": ["distribute"],
+    "gameName": "My Game",
+    "description": "Production API key for token distribution",
+    "dailyLimit": 10000
+  }'
+
+# Generate an admin-level API key
+curl -X POST http://localhost:3000/api/admin/generate-key \
+  -H "X-Admin-Secret: your-admin-secret-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Admin Key",
+    "permissions": ["read", "distribute", "admin"],
+    "description": "Full access admin key",
+    "dailyLimit": 50000
+  }'
+
+# Generate a read-only API key for analytics
+curl -X POST http://localhost:3000/api/admin/generate-key \
+  -H "X-Admin-Secret: your-admin-secret-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Analytics Key",
+    "permissions": ["read"],
+    "gameName": "Analytics Dashboard",
+    "description": "Read-only access for analytics"
+  }'
+```
+
+**Using JavaScript/Node.js:**
+```javascript
+// Generate a new API key for game servers
+const response = await fetch('/api/admin/generate-key', {
+    method: 'POST',
+    headers: {
+        'X-Admin-Secret': 'your-admin-secret-here',
+        'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+        name: 'Game Server Key',
+        permissions: ['distribute'],
+        gameName: 'My Game',
+        description: 'Production API key for token distribution',
+        dailyLimit: 10000
+    })
+});
+
+const result = await response.json();
+
+if (result.success) {
+    console.log('✅ API Key Generated Successfully!');
+    console.log('🔑 API Key:', result.data.apiKey); // ⚠️ Only returned once!
+    console.log('🆔 Key ID:', result.data.id);
+    console.log('📝 Name:', result.data.name);
+    console.log('🔐 Permissions:', result.data.permissions.join(', '));
+    
+    // ⚠️ IMPORTANT: Save the API key securely - it won't be shown again!
+} else {
+    console.error('❌ Failed to generate API key:', result.error.message);
+}
+```
+
+**Response Format:**
+```json
+{
+  "success": true,
+  "data": {
+    "apiKey": "mwt_a1b2c3d4e5f6789012345678901234567890123456789012345678901234567890",
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "name": "Game Server Key",
+    "permissions": ["distribute"],
+    "gameName": "My Game",
+    "description": "Production API key for token distribution",
+    "dailyLimit": 10000,
+    "createdAt": "2025-10-01T12:00:00.000Z"
+  }
+}
+```
+
+**Error Responses:**
+```json
+// Invalid admin secret
+{
+  "success": false,
+  "error": {
+    "message": "Invalid admin secret",
+    "code": "INVALID_ADMIN_SECRET"
+  }
+}
+
+// Rate limit exceeded
+{
+  "success": false,
+  "error": {
+    "message": "Too many admin requests from this IP, please try again later.",
+    "code": "RATE_LIMIT_EXCEEDED",
+    "retryAfter": 900
+  }
+}
+
+// Validation error
+{
+  "success": false,
+  "error": {
+    "message": "Validation failed",
+    "code": "VALIDATION_ERROR",
+    "details": [
+      {
+        "field": "name",
+        "message": "Name must be 1-100 characters"
+      }
+    ]
+  }
+}
+```
+
+**Permission Levels:**
+- **`read`**: Can query balances, stats, and transaction history
+- **`distribute`**: Can distribute tokens to players
+- **`burn`**: Can burn tokens for in-game purchases
+- **`admin`**: Full administrative access (use with caution)
+
+**Security Notes:**
+- 🔒 **Store API keys securely** - they are only returned once during creation
+- ⚠️ **Never log or expose API keys** in client-side code or version control
+- 🔄 **Generate separate keys** for different environments (dev/staging/prod)
+- 📊 **Monitor usage** through the admin dashboard
+- 🚫 **Revoke compromised keys** immediately using the admin interface
+
+### List API Keys
+
+**Get all API keys:**
+```http
+GET /api/admin/keys
+X-Admin-Secret: your-admin-secret-here
+```
+
+### Revoke API Key
+
+**Revoke a specific API key:**
+```http
+POST /api/admin/keys/{key-id}/revoke
+X-Admin-Secret: your-admin-secret-here
+```
+
 ## 🎮 Game Integration
 
 ### JavaScript/Node.js with Axios
@@ -192,16 +368,36 @@ class MagicWorldTokenAPI {
     }
 
     /**
-     * Distribute equal amounts to multiple players (gas efficient)
+     * Distribute equal tokens to multiple players from a vault
+     * @param {number} vaultType - Vault type (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)
      * @param {string[]} recipients - Array of player addresses
-     * @param {string} amount - Token amount per player
+     * @param {string} amount - Token amount per player (in tokens, not wei)
      * @param {string} reason - Reason for distribution
      */
-    async distributeEqualTokens(recipients, amount, reason = 'Equal Token Distribution') {
+    async distributeEqualTokens(vaultType, recipients, amount, reason = 'Equal Token Distribution') {
         const response = await axios.post(`${this.baseUrl}/api/tokens/distribute-equal`, {
+            vaultType,
             recipients,
             amount,
             reason
+        }, { headers: this.headers });
+
+        return response.data;
+    }
+
+    /**
+     * Estimate gas cost for distribution
+     * @param {string} method - 'distributeEqualRewards'
+     * @param {number} vaultType - Vault type (0-3)
+     * @param {string[]} recipients - Array of player addresses
+     * @param {string} amount - Single amount for all recipients
+     */
+    async estimateGas(method, vaultType, recipients, amount) {
+        const response = await axios.post(`${this.baseUrl}/api/tokens/estimate-gas`, {
+            method,
+            vaultType,
+            recipients,
+            amount
         }, { headers: this.headers });
 
         return response.data;
@@ -358,6 +554,7 @@ async function distributeDailyRewards() {
         ];
 
         const result = await tokenAPI.distributeEqualTokens(
+            0, // PLAYER_TASKS vault
             activePlayers,
             '10', // 10 MWT tokens each
             'Daily Login Bonus'
@@ -365,6 +562,7 @@ async function distributeDailyRewards() {
 
         console.log('Distributed to', result.data.recipients, 'players');
         console.log('Total tokens distributed:', result.data.totalAmount);
+        console.log('Vault used:', result.data.vaultName);
     } catch (error) {
         console.error('Equal distribution failed:', error.response?.data || error.message);
     }
@@ -397,6 +595,7 @@ async function estimateDistributionCost() {
     try {
         const estimate = await tokenAPI.estimateGas(
             'distributeEqualRewards',
+            0, // PLAYER_TASKS vault
             ['0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3611', '0x742d35Cc6634C0532925a3b8D6Ac6f1b478c3612'],
             '25'
         );
@@ -448,11 +647,11 @@ async function handleGameEvent(eventType, players, rewards) {
     try {
         switch (eventType) {
             case 'daily_login':
-                await tokenAPI.distributeEqualTokens(players, '5', 'Daily Login Reward');
+                await tokenAPI.distributeEqualTokens(0, players, '5', 'Daily Login Reward'); // PLAYER_TASKS
                 break;
 
             case 'match_win':
-                // Different rewards based on performance
+                // Different rewards based on performance - use distributeFromVault for different amounts
                 await tokenAPI.distributeTokens(
                     players.map(p => p.address),
                     players.map(p => p.reward.toString()),
@@ -476,6 +675,14 @@ async function handleGameEvent(eventType, players, rewards) {
                     players.map(p => p.prize.toString()),
                     'Tournament Prizes'
                 );
+                break;
+
+            case 'social_engagement':
+                await tokenAPI.distributeEqualTokens(1, players, '2', 'Social Media Follower Reward'); // SOCIAL_FOLLOWERS
+                break;
+
+            case 'content_creation':
+                await tokenAPI.distributeEqualTokens(2, players, '5', 'Content Creation Reward'); // SOCIAL_POSTERS
                 break;
         }
 
@@ -699,13 +906,13 @@ REDIS_URL=redis://localhost:6379
 
 ### 1. Daily Login Rewards
 ```javascript
-// Reward all active players 10 tokens daily
-await tokenAPI.distributeEqualRewards(activePlayers, "10", "Daily Login Bonus");
+// Reward all active players 10 tokens daily from PLAYER_TASKS vault
+await tokenAPI.distributeEqualTokens(0, activePlayers, "10", "Daily Login Bonus");
 ```
 
 ### 2. Tournament Prizes
 ```javascript
-// Different prizes for tournament winners
+// Different prizes for tournament winners - use distributeFromVault for different amounts
 await tokenAPI.distributeTokens(
     [winner, runnerUp, thirdPlace],
     ["1000", "500", "250"],
@@ -724,6 +931,15 @@ const achievements = [
 for (const achievement of achievements) {
     await tokenAPI.distributeTokens([achievement.player], [achievement.tokens], achievement.achievement);
 }
+```
+
+### 4. Social Media Engagement
+```javascript
+// Reward players for social media followers
+await tokenAPI.distributeEqualTokens(1, engagedPlayers, "5", "Social Media Engagement");
+
+// Reward content creators
+await tokenAPI.distributeEqualTokens(2, contentCreators, "15", "Content Creation");
 ```
 
 ### 4. Real-time Balance Display

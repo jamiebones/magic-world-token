@@ -31,6 +31,10 @@ describe("Integration Tests", function () {
         // Complete setup as described in deployment pattern
         await token.transfer(await game.getAddress(), TOTAL_SUPPLY);
 
+        // Initialize vaults with 10% partner allocation
+        const partnerAllocation = TOTAL_SUPPLY / 10n; // 10% of total supply
+        await game.initializeVaults(TOTAL_SUPPLY, partnerAllocation);
+
         const GAME_OPERATOR_ROLE = await token.GAME_OPERATOR_ROLE();
         await token.grantRole(GAME_OPERATOR_ROLE, await game.getAddress());
 
@@ -69,7 +73,8 @@ describe("Integration Tests", function () {
             const loginPlayers = players.slice(0, 5);
             const dailyReward = ethers.parseEther("10");
 
-            await game.connect(distributor).distributeEqualRewards(
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 loginPlayers.map(p => p.address),
                 dailyReward,
                 "Daily Login Bonus"
@@ -94,7 +99,8 @@ describe("Integration Tests", function () {
                 ethers.parseEther("250")   // 3rd place
             ];
 
-            await game.connect(distributor).distributeRewards(
+            await game.connect(distributor).distributeFromVault(
+                0, // PLAYER_TASKS vault
                 winners.map(p => p.address),
                 prizes,
                 "Weekly Tournament"
@@ -110,9 +116,10 @@ describe("Integration Tests", function () {
             const player = players[0];
             const initialReward = ethers.parseEther("1000");
 
-            await game.connect(distributor).distributeRewards(
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [player.address],
-                [initialReward],
+                initialReward,
                 "Quest Completion"
             );
 
@@ -141,7 +148,8 @@ describe("Integration Tests", function () {
             const batchPlayers = players.slice(0, 100);
             const rewardAmount = ethers.parseEther("5");
 
-            const tx = await game.connect(distributor).distributeEqualRewards(
+            const tx = await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 batchPlayers.map(p => p.address),
                 rewardAmount,
                 "Mass Distribution Event"
@@ -163,9 +171,10 @@ describe("Integration Tests", function () {
             const testPlayers = players.slice(0, 10);
             const amount = ethers.parseEther("10");
 
-            // Test batchTransfer
+            // Test distributeFromVault (different amounts)
             const amounts = new Array(testPlayers.length).fill(amount);
-            const tx1 = await game.connect(distributor).distributeRewards(
+            const tx1 = await game.connect(distributor).distributeFromVault(
+                0, // PLAYER_TASKS vault
                 testPlayers.map(p => p.address),
                 amounts,
                 "Batch Transfer Test"
@@ -177,8 +186,9 @@ describe("Integration Tests", function () {
                 await token.connect(player).transfer(await game.getAddress(), amount);
             }
 
-            // Test batchTransferEqual
-            const tx2 = await game.connect(distributor).distributeEqualRewards(
+            // Test distributeEqualFromVault
+            const tx2 = await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 testPlayers.map(p => p.address),
                 amount,
                 "Batch Transfer Equal Test"
@@ -199,17 +209,19 @@ describe("Integration Tests", function () {
             const dailyLimit = await game.dailyRewardLimit();
 
             // Give player rewards up to the daily limit
-            await game.connect(distributor).distributeRewards(
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [player.address],
-                [dailyLimit],
+                dailyLimit,
                 "Maximum Daily Reward"
             );
 
             // Attempting to give more should fail
             await expect(
-                game.connect(distributor).distributeRewards(
+                game.connect(distributor).distributeEqualFromVault(
+                    0, // PLAYER_TASKS vault
                     [player.address],
-                    [ethers.parseEther("1")],
+                    ethers.parseEther("1"),
                     "Exceeding Daily Limit"
                 )
             ).to.be.revertedWith("MWG: Daily limit exceeded");
@@ -221,7 +233,8 @@ describe("Integration Tests", function () {
             const amounts = new Array(Number(maxBatchSize) + 1).fill(ethers.parseEther("1"));
 
             await expect(
-                game.connect(distributor).distributeRewards(
+                game.connect(distributor).distributeFromVault(
+                    0, // PLAYER_TASKS vault
                     oversizedBatch,
                     amounts,
                     "Oversized Batch"
@@ -233,9 +246,10 @@ describe("Integration Tests", function () {
     describe("Emergency Scenarios", function () {
         it("Should handle emergency pause and recovery", async function () {
             // Normal operation
-            await game.connect(distributor).distributeRewards(
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [players[0].address],
-                [ethers.parseEther("100")],
+                ethers.parseEther("100"),
                 "Before Pause"
             );
 
@@ -244,9 +258,10 @@ describe("Integration Tests", function () {
 
             // Operations should be blocked
             await expect(
-                game.connect(distributor).distributeRewards(
+                game.connect(distributor).distributeEqualFromVault(
+                    0, // PLAYER_TASKS vault
                     [players[1].address],
-                    [ethers.parseEther("100")],
+                    ethers.parseEther("100"),
                     "During Pause"
                 )
             ).to.be.revertedWithCustomError(game, "EnforcedPause");
@@ -262,9 +277,10 @@ describe("Integration Tests", function () {
             await token.unpause();
 
             // Operations should resume
-            await game.connect(distributor).distributeRewards(
+            await game.connect(distributor).distributeEqualFromVault(
+                0, // PLAYER_TASKS vault
                 [players[1].address],
-                [ethers.parseEther("100")],
+                ethers.parseEther("100"),
                 "After Recovery"
             );
 
@@ -290,9 +306,10 @@ describe("Integration Tests", function () {
 
             // Should not be able to distribute rewards without REWARD_DISTRIBUTOR_ROLE
             await expect(
-                game.connect(unauthorizedUser).distributeRewards(
+                game.connect(unauthorizedUser).distributeEqualFromVault(
+                    0, // PLAYER_TASKS vault
                     [players[1].address],
-                    [ethers.parseEther("100")],
+                    ethers.parseEther("100"),
                     "Unauthorized"
                 )
             ).to.be.reverted;
@@ -332,7 +349,8 @@ describe("Integration Tests", function () {
                 }
 
                 // Distribute daily rewards
-                await game.connect(distributor).distributeEqualRewards(
+                await game.connect(distributor).distributeEqualFromVault(
+                    0, // PLAYER_TASKS vault
                     activePlayers.map(p => p.address),
                     dailyRewardPerPlayer,
                     `Day ${day + 1} Rewards`

@@ -1,5 +1,6 @@
 const express = require('express');
 const { body, param, validationResult } = require('express-validator');
+const { ethers } = require('ethers');
 const { asyncHandler } = require('../middleware/errorHandler');
 const { requirePermission } = require('../middleware/auth');
 const blockchainService = require('../services/blockchain');
@@ -27,9 +28,9 @@ const handleValidationErrors = (req, res, next) => {
 
 /**
  * @swagger
- * /api/tokens/distribute:
+ * /api/tokens/distribute-equal:
  *   post:
- *     summary: Distribute different amounts to multiple players
+ *     summary: Distribute equal amounts to multiple players from a vault (gas efficient)
  *     tags: [Tokens]
  *     security:
  *       - ApiKeyAuth: []
@@ -40,19 +41,103 @@ const handleValidationErrors = (req, res, next) => {
  *           schema:
  *             type: object
  *             required:
+ *               - vaultType
+ *               - recipients
+ *               - amount
+ *             properties:
+ *               vaultType:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 3
+ *                 description: Vault type (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)
+ *               recipients:
+ *                 type: array
+ *                 minItems: 1
+ *                 items:
+ *                   type: string
+ *                 description: Array of player wallet addresses
+ *               amount:
+ *                 type: string
+ *                 description: Token amount per player (in tokens, not wei)
+ *               reason:
+ *                 type: string
+ *                 description: Reason for distribution (optional)
+ *     responses:
+ *       200:
+ *         description: Tokens distributed successfully
+ *       400:
+ *         description: Invalid request data
+ *       403:
+ *         description: Insufficient permissions
+ */
+router.post('/distribute-equal',
+    requirePermission('distribute'),
+    [
+        body('vaultType')
+            .isInt({ min: 0, max: 3 })
+            .withMessage('Vault type must be 0-3 (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)'),
+        body('recipients')
+            .isArray({ min: 1 })
+            .withMessage('Recipients must be a non-empty array'),
+        body('recipients.*')
+            .isEthereumAddress()
+            .withMessage('Each recipient must be a valid Ethereum address'),
+        body('amount')
+            .isFloat({ min: 0 })
+            .withMessage('Amount must be a positive number'),
+        body('reason')
+            .optional()
+            .isString()
+            .trim()
+            .isLength({ max: 200 })
+            .withMessage('Reason must be a string (max 200 characters)')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { vaultType, recipients, amount, reason = 'Equal Token Distribution' } = req.body;
+        const result = await blockchainService.distributeEqualFromVault(vaultType, recipients, amount, reason);
+        res.json({
+            success: true,
+            data: result
+        });
+    })
+);
+/**
+ * @swagger
+ * /api/tokens/distribute:
+ *   post:
+ *     summary: Distribute different amounts to multiple players from a vault
+ *     tags: [Tokens]
+ *     security:
+ *       - ApiKeyAuth: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - vaultType
  *               - recipients
  *               - amounts
  *             properties:
+ *               vaultType:
+ *                 type: integer
+ *                 minimum: 0
+ *                 maximum: 3
+ *                 description: Vault type (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)
  *               recipients:
  *                 type: array
+ *                 minItems: 1
  *                 items:
  *                   type: string
  *                 description: Array of player wallet addresses
  *               amounts:
  *                 type: array
+ *                 minItems: 1
  *                 items:
  *                   type: string
- *                 description: Array of token amounts (in tokens, not wei)
+ *                 description: Array of token amounts per player (in tokens, not wei)
  *               reason:
  *                 type: string
  *                 description: Reason for distribution (optional)
@@ -67,6 +152,9 @@ const handleValidationErrors = (req, res, next) => {
 router.post('/distribute',
     requirePermission('distribute'),
     [
+        body('vaultType')
+            .isInt({ min: 0, max: 3 })
+            .withMessage('Vault type must be 0-3 (0=PLAYER_TASKS, 1=SOCIAL_FOLLOWERS, 2=SOCIAL_POSTERS, 3=ECOSYSTEM_FUND)'),
         body('recipients')
             .isArray({ min: 1 })
             .withMessage('Recipients must be a non-empty array'),
@@ -88,7 +176,7 @@ router.post('/distribute',
     ],
     handleValidationErrors,
     asyncHandler(async (req, res) => {
-        const { recipients, amounts, reason = 'Token Distribution' } = req.body;
+        const { vaultType, recipients, amounts, reason = 'Token Distribution' } = req.body;
         // Additional validation
         if (recipients.length !== amounts.length) {
             return res.status(400).json({
@@ -100,47 +188,8 @@ router.post('/distribute',
             });
         }
 
-        const result = await blockchainService.distributeRewards(recipients, amounts, reason);
+        const result = await blockchainService.distributeFromVault(vaultType, recipients, amounts, reason);
 
-        res.json({
-            success: true,
-            data: result
-        });
-    })
-);
-
-/**
- * @swagger
- * /api/tokens/distribute-equal:
- *   post:
- *     summary: Distribute equal amounts to multiple players (gas efficient)
- *     tags: [Tokens]
- *     security:
- *       - ApiKeyAuth: []
- */
-router.post('/distribute-equal',
-    requirePermission('distribute'),
-    [
-        body('recipients')
-            .isArray({ min: 1 })
-            .withMessage('Recipients must be a non-empty array'),
-        body('recipients.*')
-            .isEthereumAddress()
-            .withMessage('Each recipient must be a valid Ethereum address'),
-        body('amount')
-            .isFloat({ min: 0 })
-            .withMessage('Amount must be a positive number'),
-        body('reason')
-            .optional()
-            .isString()
-            .trim()
-            .isLength({ max: 200 })
-            .withMessage('Reason must be a string (max 200 characters)')
-    ],
-    handleValidationErrors,
-    asyncHandler(async (req, res) => {
-        const { recipients, amount, reason = 'Equal Token Distribution' } = req.body;
-        const result = await blockchainService.distributeEqualRewards(recipients, amount, reason);
         res.json({
             success: true,
             data: result
@@ -236,44 +285,67 @@ router.get('/transaction/:hash',
 router.post('/estimate-gas',
     [
         body('method')
-            .isIn(['distributeRewards', 'distributeEqualRewards'])
-            .withMessage('Method must be distributeRewards or distributeEqualRewards'),
+            .isIn(['distributeEqualFromVault', 'distributeFromVault'])
+            .withMessage('Method must be distributeEqualFromVault or distributeFromVault'),
+        body('vaultType')
+            .isInt({ min: 0, max: 3 })
+            .withMessage('Vault type must be 0-3'),
         body('recipients')
             .isArray({ min: 1 })
             .withMessage('Recipients must be a non-empty array'),
         body('recipients.*')
             .isEthereumAddress()
-            .withMessage('Each recipient must be a valid Ethereum address')
+            .withMessage('Each recipient must be a valid Ethereum address'),
+        body('amount')
+            .isFloat({ min: 0 })
+            .withMessage('Amount must be a positive number'),
+        body('amounts')
+            .optional()
+            .isArray({ min: 1 })
+            .withMessage('Amounts must be a non-empty array when using distributeFromVault'),
+        body('amounts.*')
+            .optional()
+            .isFloat({ min: 0 })
+            .withMessage('Each amount must be a positive number')
     ],
     handleValidationErrors,
     asyncHandler(async (req, res) => {
-        const { method, recipients, amounts, amount } = req.body;
+        const { method, vaultType, recipients, amount, amounts } = req.body;
 
         let params;
-        if (method === 'distributeRewards') {
-            if (!amounts || !Array.isArray(amounts)) {
-                return res.status(400).json({
-                    success: false,
-                    error: {
-                        message: 'amounts array required for distributeRewards',
-                        code: 'MISSING_AMOUNTS'
-                    }
-                });
-            }
-            const amountsInWei = amounts.map(amt => ethers.parseEther(amt.toString()));
-            params = [recipients, amountsInWei, 'Gas Estimation'];
-        } else {
+        if (method === 'distributeEqualFromVault') {
             if (!amount) {
                 return res.status(400).json({
                     success: false,
                     error: {
-                        message: 'amount required for distributeEqualRewards',
+                        message: 'amount required for distributeEqualFromVault',
                         code: 'MISSING_AMOUNT'
                     }
                 });
             }
             const amountInWei = ethers.parseEther(amount.toString());
-            params = [recipients, amountInWei, 'Gas Estimation'];
+            params = [vaultType, recipients, amountInWei, 'Gas Estimation'];
+        } else if (method === 'distributeFromVault') {
+            if (!amounts) {
+                return res.status(400).json({
+                    success: false,
+                    error: {
+                        message: 'amounts array required for distributeFromVault',
+                        code: 'MISSING_AMOUNTS'
+                    }
+                });
+            }
+            if (recipients.length !== amounts.length) {
+                return res.status(400).json({
+                    success: false,
+                    error: {
+                        message: 'Recipients and amounts arrays must have the same length',
+                        code: 'ARRAY_LENGTH_MISMATCH'
+                    }
+                });
+            }
+            const amountsInWei = amounts.map(a => ethers.parseEther(a.toString()));
+            params = [vaultType, recipients, amountsInWei, 'Gas Estimation'];
         }
 
         const gasEstimate = await blockchainService.estimateGas(method, params);
