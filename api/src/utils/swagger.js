@@ -18,11 +18,13 @@ const options = {
         },
         servers: [
             {
-                url: process.env.NODE_ENV === 'production'
-                    ? 'https://api.magicworldtoken.com'
-                    : `http://localhost:${process.env.PORT || 3000}`,
-                description: process.env.NODE_ENV === 'production' ? 'Production server' : 'Development server'
-            }
+                url: process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 3000}`,
+                description: process.env.API_BASE_URL ? 'Production server' : 'Development server'
+            },
+            ...(process.env.API_BASE_URL ? [{
+                url: `http://localhost:${process.env.PORT || 3000}`,
+                description: 'Local development server'
+            }] : [])
         ],
         components: {
             securitySchemes: {
