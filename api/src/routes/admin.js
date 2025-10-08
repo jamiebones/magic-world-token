@@ -416,8 +416,8 @@ router.post('/keys/:id/revoke',
  *               count:
  *                 type: integer
  *                 minimum: 1
- *                 maximum: 100
- *                 description: Number of wallets to generate (default 1, max 100)
+ *                 maximum: 2000
+ *                 description: Number of wallets to generate (default 1, max 2000)
  *                 example: 5
  *               returnPrivateKey:
  *                 type: boolean
@@ -471,8 +471,8 @@ router.post('/wallets/generate',
     [
         body('count')
             .optional()
-            .isInt({ min: 1, max: 100 })
-            .withMessage('Count must be between 1 and 100'),
+            .isInt({ min: 1, max: 2000 })
+            .withMessage('Count must be between 1 and 2000'),
         body('returnPrivateKey')
             .optional()
             .isBoolean()
@@ -606,6 +606,114 @@ router.get('/wallets',
                     limit: limitNum,
                     pages: Math.ceil(total / limitNum)
                 }
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets/export/addresses:
+ *   get:
+ *     summary: Export ALL wallet addresses (Admin only)
+ *     description: Returns all wallet addresses without pagination. Optimized for bulk export.
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: format
+ *         schema:
+ *           type: string
+ *           enum: [json, csv, txt]
+ *           default: json
+ *         description: Output format (json, csv, or txt)
+ *     responses:
+ *       200:
+ *         description: All wallet addresses exported successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       example: 2000
+ *                     addresses:
+ *                       type: array
+ *                       items:
+ *                         type: string
+ *                       example: ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1", "0x..."]
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1\n0x..."
+ *           text/plain:
+ *             schema:
+ *               type: string
+ *               example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1\n0x..."
+ *       403:
+ *         description: Invalid admin secret
+ */
+router.get('/wallets/export/addresses',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { format = 'json' } = req.query;
+
+        logger.info(`Exporting all wallet addresses (format: ${format}) by admin from ${req.ip}`);
+        const startTime = Date.now();
+
+        // Fetch only address field for efficiency
+        const wallets = await Wallet.find({})
+            .select('address')
+            .sort({ createdAt: 1 })
+            .lean(); // Use lean() for better performance (returns plain JS objects)
+
+        const count = wallets.length;
+        const elapsedTime = Date.now() - startTime;
+        
+        logger.info(`✅ Exported ${count} wallet addresses in ${elapsedTime}ms`);
+
+        // Format output based on requested format
+        if (format === 'csv') {
+            // CSV format: one address per line with header
+            let csv = 'address\n';
+            csv += wallets.map(w => w.address).join('\n');
+
+            res.setHeader('Content-Type', 'text/csv');
+            res.setHeader('Content-Disposition', `attachment; filename="wallet-addresses-${Date.now()}.csv"`);
+            return res.send(csv);
+        }
+
+        if (format === 'txt') {
+            // Plain text format: one address per line (no header)
+            const txt = wallets.map(w => w.address).join('\n');
+
+            res.setHeader('Content-Type', 'text/plain');
+            res.setHeader('Content-Disposition', `attachment; filename="wallet-addresses-${Date.now()}.txt"`);
+            return res.send(txt);
+        }
+
+        // Default: JSON format - simple array of addresses
+        res.json({
+            success: true,
+            data: {
+                count,
+                addresses: wallets.map(w => w.address),
+                exportedAt: new Date().toISOString(),
+                format: 'json'
             }
         });
     })
