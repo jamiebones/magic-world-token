@@ -139,7 +139,7 @@ X-API-Key: your-api-key
 
 ## 🔐 Admin Endpoints
 
-Admin endpoints require special authentication using an admin secret hash. These endpoints are used to manage API keys for game servers and applications.
+Admin endpoints require special authentication using an admin secret hash. These endpoints are used to manage API keys for game servers and applications, as well as generate EVM wallets for various purposes.
 
 ### Admin Authentication
 
@@ -156,7 +156,61 @@ X-Admin-Secret: your-admin-secret-here
    # In your .env file
    ADMIN_SECRET_HASH=your-generated-hash-here
    ADMIN_SECRET_SALT=optional-salt-for-extra-security
+   WALLET_ENCRYPTION_KEY=your-64-character-hex-encryption-key
    ```
+
+2. **Generate Wallet Encryption Key:**
+   ```bash
+   # Generate a secure 32-byte (64 hex chars) encryption key
+   node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+   ```
+
+### Generate EVM Wallets
+
+**Generate a new wallet:**
+```bash
+curl -X POST http://localhost:3000/api/admin/wallets/generate \
+  -H "X-Admin-Secret: your-admin-secret-here" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "label": "Player Reward Wallet #1",
+    "purpose": "Automated reward distribution",
+    "gameId": "magic-world-game",
+    "returnPrivateKey": true
+  }'
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "550e8400-e29b-41d4-a716-446655440000",
+    "address": "0x742d35cc6634c0532925a3b844bc9e7595f0beb1",
+    "privateKey": "0x1234567890abcdef...",
+    "label": "Player Reward Wallet #1",
+    "purpose": "Automated reward distribution",
+    "isActive": true,
+    "createdAt": "2025-10-08T12:00:00.000Z",
+    "warning": "PRIVATE KEY EXPOSED - Store securely and never share!"
+  }
+}
+```
+
+**⚠️ Security Notes for Wallet Generation:**
+- Private keys are encrypted in MongoDB using AES-256-CBC
+- `returnPrivateKey` should only be set to `true` during initial setup
+- Store private keys securely (e.g., in a secrets manager)
+- Never log or commit private keys to version control
+- Use different encryption keys for dev/staging/production
+
+**Additional Wallet Endpoints:**
+- `GET /api/admin/wallets` - List all wallets with filters
+- `GET /api/admin/wallets/:id?includePrivateKey=true` - Get wallet details
+- `POST /api/admin/wallets/:id/deactivate` - Deactivate a wallet
+- `POST /api/admin/wallets/:id/mark-compromised` - Mark wallet as compromised
+
+For complete wallet API documentation, see [WALLET_API.md](./WALLET_API.md)
 
 ### Generate API Keys via API
 

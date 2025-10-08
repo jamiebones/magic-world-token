@@ -4,6 +4,8 @@ const rateLimit = require('express-rate-limit');
 const crypto = require('crypto');
 const { asyncHandler } = require('../middleware/errorHandler');
 const ApiKey = require('../models/ApiKey');
+const Wallet = require('../models/Wallet');
+const { generateEncryptedWallet, decryptPrivateKey } = require('../utils/walletUtils');
 const logger = require('../utils/logger');
 
 const router = express.Router();
@@ -125,9 +127,10 @@ const adminRateLimit = rateLimit({
     },
     standardHeaders: true,
     legacyHeaders: false,
-    // Log rate limit violations
-    onLimitReached: (req) => {
+    // Log rate limit violations using handler
+    handler: (req, res, next, options) => {
         logger.warn(`Admin rate limit exceeded for IP: ${req.ip}`);
+        res.status(options.statusCode).json(options.message);
     }
 });
 
@@ -385,6 +388,357 @@ router.post('/keys/:id/revoke',
         res.json({
             success: true,
             message: 'API key revoked successfully'
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets/generate:
+ *   post:
+ *     summary: Generate one or more EVM wallet addresses (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               count:
+ *                 type: integer
+ *                 minimum: 1
+ *                 maximum: 100
+ *                 description: Number of wallets to generate (default 1, max 100)
+ *                 example: 5
+ *               returnPrivateKey:
+ *                 type: boolean
+ *                 description: Whether to return the private keys (WARNING - only use for initial setup)
+ *                 example: false
+ *     responses:
+ *       201:
+ *         description: Wallet(s) created successfully
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     count:
+ *                       type: integer
+ *                       example: 5
+ *                     wallets:
+ *                       type: array
+ *                       items:
+ *                         type: object
+ *                         properties:
+ *                           id:
+ *                             type: string
+ *                             example: "550e8400-e29b-41d4-a716-446655440000"
+ *                           address:
+ *                             type: string
+ *                             example: "0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1"
+ *                           privateKey:
+ *                             type: string
+ *                             example: "0x1234...abcd"
+ *                             description: Only included if returnPrivateKey=true
+ *                           createdAt:
+ *                             type: string
+ *                       format: date-time
+ *       400:
+ *         description: Invalid request data
+ *       401:
+ *         description: Missing admin secret
+ *       403:
+ *         description: Invalid admin secret
+ */
+router.post('/wallets/generate',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('count')
+            .optional()
+            .isInt({ min: 1, max: 100 })
+            .withMessage('Count must be between 1 and 100'),
+        body('returnPrivateKey')
+            .optional()
+            .isBoolean()
+            .withMessage('returnPrivateKey must be a boolean')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { count = 1, returnPrivateKey = false } = req.body;
+        logger.info(`Starting batch generation of ${count} wallet(s) by admin from ${req.ip}`);
+        const walletsToCreate = [];
+        const walletDetails = [];
+
+        for (let i = 0; i < count; i++) {
+            const { address, encryptedPrivateKey, iv } = generateEncryptedWallet();
+
+            walletsToCreate.push({
+                address,
+                encryptedPrivateKey,
+                iv
+            });
+
+            walletDetails.push({
+                address,
+                encryptedPrivateKey,
+                iv
+            });
+        }
+
+        // Batch insert all wallets at once (fast - single DB operation)
+        const savedWallets = await Wallet.insertMany(walletsToCreate);
+
+        // Prepare response data
+        const wallets = savedWallets.map((wallet, index) => {
+            const walletData = {
+                id: wallet.id,
+                address: wallet.address,
+                createdAt: wallet.createdAt
+            };
+
+            // Only return private key if explicitly requested (DANGEROUS!)
+            if (returnPrivateKey) {
+                const privateKey = decryptPrivateKey(
+                    walletDetails[index].encryptedPrivateKey,
+                    walletDetails[index].iv
+                );
+                walletData.privateKey = privateKey;
+            }
+
+            return walletData;
+        });
+
+        if (returnPrivateKey) {
+            logger.warn(`⚠️  Private keys returned for ${count} wallet(s) - requested by admin from ${req.ip}`);
+        }
+
+        const response = {
+            success: true,
+            data: {
+                count: wallets.length,
+                wallets: wallets
+            }
+        };
+
+        if (returnPrivateKey) {
+            response.data.warning = 'PRIVATE KEYS EXPOSED - Store securely and never share!';
+        }
+
+        res.status(201).json(response);
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets:
+ *   get:
+ *     summary: List all generated wallets (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Number of results to return
+ *       - in: query
+ *         name: page
+ *         schema:
+ *           type: integer
+ *           default: 1
+ *         description: Page number
+ *     responses:
+ *       200:
+ *         description: Wallets retrieved successfully
+ */
+router.get('/wallets',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { limit = 50, page = 1 } = req.query;
+
+        // Build query
+        const query = {};
+
+        // Pagination
+        const skip = (parseInt(page) - 1) * parseInt(limit);
+        const limitNum = Math.min(parseInt(limit), 100); // Max 100 per page
+
+        // Get wallets (never return encrypted keys)
+        const wallets = await Wallet.find(query)
+            .select('-encryptedPrivateKey -iv -__v')
+            .sort({ createdAt: -1 })
+            .limit(limitNum)
+            .skip(skip);
+
+        const total = await Wallet.countDocuments(query);
+
+        res.json({
+            success: true,
+            data: {
+                wallets,
+                pagination: {
+                    total,
+                    page: parseInt(page),
+                    limit: limitNum,
+                    pages: Math.ceil(total / limitNum)
+                }
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets/{id}:
+ *   get:
+ *     summary: Get wallet details by ID (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Wallet ID
+ *       - in: query
+ *         name: includePrivateKey
+ *         schema:
+ *           type: boolean
+ *           default: false
+ *         description: Include decrypted private key (DANGEROUS!)
+ *     responses:
+ *       200:
+ *         description: Wallet details retrieved
+ *       404:
+ *         description: Wallet not found
+ */
+router.get('/wallets/:id',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { id } = req.params;
+        const { includePrivateKey = false } = req.query;
+
+        const wallet = await Wallet.findOne({ id });
+
+        if (!wallet) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    message: 'Wallet not found',
+                    code: 'WALLET_NOT_FOUND'
+                }
+            });
+        }
+
+        const walletData = {
+            id: wallet.id,
+            address: wallet.address,
+            createdAt: wallet.createdAt,
+            updatedAt: wallet.updatedAt
+        };
+
+        // Only return private key if explicitly requested
+        if (includePrivateKey === 'true') {
+            logger.warn(`Private key accessed for wallet ${wallet.address} by admin from ${req.ip}`);
+            const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey, wallet.iv);
+            walletData.privateKey = privateKey;
+            walletData.warning = 'PRIVATE KEY EXPOSED - Handle with extreme care!';
+        }
+
+        res.json({
+            success: true,
+            data: walletData
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets/{id}/private-key:
+ *   get:
+ *     summary: Get decrypted private key for a wallet (Admin only - DANGEROUS!)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: path
+ *         name: id
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Wallet ID
+ *     responses:
+ *       200:
+ *         description: Private key retrieved
+ *       404:
+ *         description: Wallet not found
+ */
+router.get('/wallets/:id/private-key',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { id } = req.params;
+
+        const wallet = await Wallet.findOne({ id });
+
+        if (!wallet) {
+            return res.status(404).json({
+                success: false,
+                error: {
+                    message: 'Wallet not found',
+                    code: 'WALLET_NOT_FOUND'
+                }
+            });
+        }
+
+        logger.warn(`Private key accessed for wallet ${wallet.address} by admin from ${req.ip}`);
+        const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey, wallet.iv);
+
+        res.json({
+            success: true,
+            data: {
+                id: wallet.id,
+                address: wallet.address,
+                privateKey: privateKey,
+                warning: 'PRIVATE KEY EXPOSED - Handle with extreme care!'
+            }
         });
     })
 );
