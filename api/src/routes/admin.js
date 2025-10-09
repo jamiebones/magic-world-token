@@ -683,7 +683,7 @@ router.get('/wallets/export/addresses',
 
         const count = wallets.length;
         const elapsedTime = Date.now() - startTime;
-        
+
         logger.info(`✅ Exported ${count} wallet addresses in ${elapsedTime}ms`);
 
         // Format output based on requested format
@@ -721,9 +721,9 @@ router.get('/wallets/export/addresses',
 
 /**
  * @swagger
- * /api/admin/wallets/{id}:
+ * /api/admin/wallets/{address}:
  *   get:
- *     summary: Get wallet details by ID (Admin only)
+ *     summary: Get wallet details by address (Admin only)
  *     tags: [Admin]
  *     security: []
  *     parameters:
@@ -734,11 +734,11 @@ router.get('/wallets/export/addresses',
  *           type: string
  *         description: Admin secret for authentication
  *       - in: path
- *         name: id
+ *         name: address
  *         required: true
  *         schema:
  *           type: string
- *         description: Wallet ID
+ *         description: Wallet address (0x...)
  *       - in: query
  *         name: includePrivateKey
  *         schema:
@@ -751,14 +751,15 @@ router.get('/wallets/export/addresses',
  *       404:
  *         description: Wallet not found
  */
-router.get('/wallets/:id',
+router.get('/wallets/:address',
     adminRateLimit,
     validateAdminSecret,
     asyncHandler(async (req, res) => {
-        const { id } = req.params;
+        const { address } = req.params;
         const { includePrivateKey = false } = req.query;
 
-        const wallet = await Wallet.findOne({ id });
+        // Find wallet by address (case-insensitive)
+        const wallet = await Wallet.findOne({ address: address.toLowerCase() });
 
         if (!wallet) {
             return res.status(404).json({
@@ -794,7 +795,7 @@ router.get('/wallets/:id',
 
 /**
  * @swagger
- * /api/admin/wallets/{id}/private-key:
+ * /api/admin/wallets/{address}/private-key:
  *   get:
  *     summary: Get decrypted private key for a wallet (Admin only - DANGEROUS!)
  *     tags: [Admin]
@@ -807,24 +808,25 @@ router.get('/wallets/:id',
  *           type: string
  *         description: Admin secret for authentication
  *       - in: path
- *         name: id
+ *         name: address
  *         required: true
  *         schema:
  *           type: string
- *         description: Wallet ID
+ *         description: Wallet address (0x...)
  *     responses:
  *       200:
  *         description: Private key retrieved
  *       404:
  *         description: Wallet not found
  */
-router.get('/wallets/:id/private-key',
+router.get('/wallets/:address/private-key',
     adminRateLimit,
     validateAdminSecret,
     asyncHandler(async (req, res) => {
-        const { id } = req.params;
+        const { address } = req.params;
 
-        const wallet = await Wallet.findOne({ id });
+        // Find wallet by address (case-insensitive)
+        const wallet = await Wallet.findOne({ address: address.toLowerCase() });
 
         if (!wallet) {
             return res.status(404).json({
@@ -836,7 +838,7 @@ router.get('/wallets/:id/private-key',
             });
         }
 
-        logger.warn(`Private key accessed for wallet ${wallet.address} by admin from ${req.ip}`);
+        logger.warn(`🔑 Private key accessed for wallet ${wallet.address} by admin from ${req.ip}`);
         const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey, wallet.iv);
 
         res.json({

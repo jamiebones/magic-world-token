@@ -10,6 +10,17 @@ export function Navbar() {
   const { hasAnyAdminRole, isConnected } = useMultiRoleGate();
 
   const isActive = (path: string) => {
+    // Home page - exact match only
+    if (path === "/") {
+      return pathname === "/";
+    }
+    
+    // Admin dashboard - exact match only (not its sub-routes)
+    if (path === "/admin") {
+      return pathname === "/admin";
+    }
+    
+    // For all other paths - exact match or starts with path + "/"
     return pathname === path || pathname.startsWith(path + "/");
   };
 

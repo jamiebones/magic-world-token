@@ -8,6 +8,10 @@ typechain-types/
 # Environment variables
 .env
 
+# Sensitive wallet data
+wallets.csv
+api/wallets.csv
+
 # Dependencies
 node_modules/
 

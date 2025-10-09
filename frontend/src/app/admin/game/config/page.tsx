@@ -53,14 +53,16 @@ function ConfigForm() {
   const [settingType, setSettingType] = useState<
     "dailyLimit" | "batchSize" | "cooldown" | null
   >(null);
+  const [initialized, setInitialized] = useState(false);
 
   useEffect(() => {
-    if (!gameStats.isLoading) {
+    if (!gameStats.isLoading && !initialized && gameStats.dailyLimit) {
       setDailyLimit(gameStats.dailyLimit);
       setBatchSize(gameStats.maxBatchSize);
       setCooldown((parseInt(gameStats.cooldownPeriod) / 3600).toString());
+      setInitialized(true);
     }
-  }, [gameStats]);
+  }, [gameStats, initialized]);
 
   useEffect(() => {
     if (isSuccess) {
@@ -76,7 +78,8 @@ function ConfigForm() {
   }, [error]);
 
   const handleUpdateDailyLimit = async () => {
-    if (!dailyLimit || parseFloat(dailyLimit) <= 0) {
+    const limit = parseFloat(dailyLimit);
+    if (isNaN(limit) || limit <= 0) {
       toast.error("Please enter a valid daily limit");
       return;
     }
@@ -94,8 +97,8 @@ function ConfigForm() {
   };
 
   const handleUpdateBatchSize = async () => {
-    const size = parseInt(batchSize);
-    if (!size || size <= 0 || size > 500) {
+    const size = parseInt(batchSize, 10);
+    if (isNaN(size) || size <= 0 || size > 500) {
       toast.error("Batch size must be between 1 and 500");
       return;
     }
@@ -114,7 +117,7 @@ function ConfigForm() {
 
   const handleUpdateCooldown = async () => {
     const hours = parseFloat(cooldown);
-    if (!hours || hours < 0.0167 || hours > 168) {
+    if (isNaN(hours) || hours < 0.0167 || hours > 168) {
       // 1 min to 7 days
       toast.error("Cooldown must be between 1 minute and 7 days");
       return;
