@@ -853,4 +853,186 @@ router.get('/wallets/:address/private-key',
     })
 );
 
+/**
+ * @swagger
+ * /api/admin/wallets/batch/private-keys:
+ *   post:
+ *     summary: Get private keys for multiple wallets (Admin only - EXTREMELY DANGEROUS!)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - addresses
+ *             properties:
+ *               addresses:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of wallet addresses
+ *                 example: ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1", "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063"]
+ *     responses:
+ *       200:
+ *         description: Private keys retrieved for found addresses
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Invalid admin secret
+ */
+router.post('/wallets/batch/private-keys',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('addresses')
+            .isArray({ min: 1 })
+            .withMessage('Addresses must be a non-empty array'),
+        body('addresses.*')
+            .isEthereumAddress()
+            .withMessage('Each address must be a valid Ethereum address')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { addresses } = req.body;
+
+        logger.warn(`🔑🔑🔑 BATCH PRIVATE KEY ACCESS: ${addresses.length} addresses requested by admin from ${req.ip}`);
+
+        // Convert addresses to lowercase for case-insensitive search
+        const lowercaseAddresses = addresses.map(addr => addr.toLowerCase());
+
+        // Find all wallets matching the addresses
+        const wallets = await Wallet.find({
+            address: { $in: lowercaseAddresses }
+        });
+
+        // Build result object: { address: privateKey }
+        const result = {};
+
+        for (const wallet of wallets) {
+            const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey, wallet.iv);
+            result[wallet.address] = privateKey;
+        }
+        const foundAddresses = wallets.map(w => w.address);
+        const notFoundAddresses = lowercaseAddresses.filter(addr => !foundAddresses.includes(addr));
+
+        if (notFoundAddresses.length > 0) {
+            logger.info(`⚠️  ${notFoundAddresses.length} addresses not found in database`);
+        }
+
+        res.json({
+            success: true,
+            data: result,
+            found: wallets.length,
+            notFound: notFoundAddresses.length
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallets/batch/private-keys/csv:
+ *   post:
+ *     summary: Get private keys for multiple wallets as CSV download (Admin only - EXTREMELY DANGEROUS!)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - addresses
+ *             properties:
+ *               addresses:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of wallet addresses
+ *                 example: ["0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1", "0x8f3Cf7ad23Cd3CaDbD9735AFf958023239c6A063"]
+ *     responses:
+ *       200:
+ *         description: CSV file with wallet addresses and private keys
+ *         content:
+ *           text/csv:
+ *             schema:
+ *               type: string
+ *               example: "address,privateKey\n0x742d35Cc6634C0532925a3b844Bc9e7595f0bEb1,0x1234...abcd\n"
+ *       400:
+ *         description: Invalid request
+ *       403:
+ *         description: Invalid admin secret
+ */
+router.post('/wallets/batch/private-keys/csv',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('addresses')
+            .isArray({ min: 1 })
+            .withMessage('Addresses must be a non-empty array'),
+        body('addresses.*')
+            .isEthereumAddress()
+            .withMessage('Each address must be a valid Ethereum address')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { addresses } = req.body;
+
+        logger.warn(`🔑📥 BATCH PRIVATE KEY CSV DOWNLOAD: ${addresses.length} addresses requested by admin from ${req.ip}`);
+
+        // Convert addresses to lowercase for case-insensitive search
+        const lowercaseAddresses = addresses.map(addr => addr.toLowerCase());
+
+        // Find all wallets matching the addresses
+        const wallets = await Wallet.find({
+            address: { $in: lowercaseAddresses }
+        });
+
+        // Build CSV content
+        let csv = 'address,privateKey\n';
+
+        for (const wallet of wallets) {
+            const privateKey = decryptPrivateKey(wallet.encryptedPrivateKey, wallet.iv);
+            csv += `${wallet.address},${privateKey}\n`;
+            logger.info(`🔑 Private key accessed for CSV export: ${wallet.address}`);
+        }
+
+        const foundAddresses = wallets.map(w => w.address);
+        const notFoundAddresses = lowercaseAddresses.filter(addr => !foundAddresses.includes(addr));
+
+        if (notFoundAddresses.length > 0) {
+            logger.warn(`⚠️  ${notFoundAddresses.length} addresses not found for CSV export`);
+            // Add comment in CSV about missing addresses
+            csv += `\n# Note: ${notFoundAddresses.length} addresses were not found in the database\n`;
+            csv += `# Missing addresses: ${notFoundAddresses.join(', ')}\n`;
+        }
+
+        // Set headers for CSV download
+        const timestamp = Date.now();
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', `attachment; filename="wallet-private-keys-${timestamp}.csv"`);
+
+        logger.warn(`⚠️⚠️⚠️ CSV with ${wallets.length} PRIVATE KEYS downloaded by admin from ${req.ip}`);
+
+        res.send(csv);
+    })
+);
+
 module.exports = router;
