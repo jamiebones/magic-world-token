@@ -158,58 +158,7 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Features Overview */}
-            <div className="bg-gray-800/50 backdrop-blur-sm rounded-2xl p-6 border border-purple-500/20">
-              <h3 className="text-lg font-semibold mb-4 text-purple-400">
-                Platform Features
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">🎮</div>
-                  <div>
-                    <h4 className="text-white font-medium mb-1">
-                      Play-to-Earn
-                    </h4>
-                    <p className="text-sm text-gray-400">
-                      Earn MWT tokens by playing Magic World games
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">🔒</div>
-                  <div>
-                    <h4 className="text-white font-medium mb-1">
-                      Secure Vaults
-                    </h4>
-                    <p className="text-sm text-gray-400">
-                      Transparent token allocation with vault system
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">⚡</div>
-                  <div>
-                    <h4 className="text-white font-medium mb-1">
-                      Low Gas Fees
-                    </h4>
-                    <p className="text-sm text-gray-400">
-                      Built on Polygon for efficient transactions
-                    </p>
-                  </div>
-                </div>
-                <div className="flex items-start space-x-3">
-                  <div className="text-2xl">👥</div>
-                  <div>
-                    <h4 className="text-white font-medium mb-1">
-                      Community Rewards
-                    </h4>
-                    <p className="text-sm text-gray-400">
-                      Earn tokens for social engagement and content creation
-                    </p>
-                  </div>
-                </div>
-              </div>
-            </div>
+      
           </div>
         )}
       </main>
