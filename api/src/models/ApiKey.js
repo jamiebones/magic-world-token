@@ -22,7 +22,7 @@ const apiKeySchema = new mongoose.Schema({
     },
     permissions: [{
         type: String,
-        enum: ['read', 'distribute', 'admin'],
+        enum: ['read', 'distribute', 'bot', 'admin'],
         default: ['read']
     }],
     isActive: {
