@@ -165,8 +165,8 @@ const adminRateLimit = rateLimit({
  *                 type: array
  *                 items:
  *                   type: string
- *                   enum: [read, distribute, admin]
- *                 description: Permissions for the API key
+ *                   enum: [read, distribute, bot, admin]
+ *                 description: Permissions for the API key (read=public data, distribute=token distribution, bot=trading bot access, admin=full access)
  *                 example: ["distribute"]
  *               gameName:
  *                 type: string
@@ -238,8 +238,8 @@ router.post('/generate-key',
             .withMessage('Permissions must be an array'),
         body('permissions.*')
             .optional()
-            .isIn(['read', 'distribute', 'admin'])
-            .withMessage('Invalid permission - must be read, distribute, or admin'),
+            .isIn(['read', 'distribute', 'bot', 'admin'])
+            .withMessage('Invalid permission - must be read, distribute, bot, or admin'),
         body('gameName')
             .optional()
             .isString()
