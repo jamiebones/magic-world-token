@@ -173,7 +173,7 @@ async function initializeDefaultKeys() {
             const existingKeys = await ApiKey.countDocuments();
             if (existingKeys === 0) {
                 // Generate a default development key
-                const devKey = await generateApiKey('Development Key', ['read', 'distribute', 'admin'], {
+                const devKey = await generateApiKey('Development Key', ['read', 'distribute', 'bot', 'admin'], {
                     gameName: 'Development Game',
                     developerEmail: 'dev@magicworldtoken.com',
                     description: 'Default development API key - replace in production'

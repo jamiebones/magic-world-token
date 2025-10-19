@@ -223,3 +223,215 @@ test/
 - Use OpenZeppelin's `_msgSender()` instead of `msg.sender`
 - Implement proper error messages for better debugging
 - Gas estimation should account for Polygon's lower costs vs Ethereum
+
+## Trading Bot Integration
+
+### Overview
+
+Automated trading bot system for maintaining MWT/BNB peg on PancakeSwap. The bot is a **separate standalone project** that consumes the API exposed by the backend.
+
+### Architecture
+
+```
+Magic_World_Token/
+├── api/                    # Backend API (extends existing)
+│   └── src/
+│       ├── bot/           # Bot-related services & endpoints
+│       │   ├── services/  # Blockchain interaction services
+│       │   ├── models/    # Bot data models
+│       │   └── utils/     # Bot utilities
+│       └── routes/
+│           └── bot.js     # Bot API endpoints
+│
+└── bot/                   # Standalone Bot Project (separate)
+    └── src/
+        ├── bot.js         # Main bot orchestrator
+        └── services/      # Bot logic & API client
+```
+
+### Part 1: API Backend Extensions
+
+#### Directory Structure
+
+```
+api/src/bot/
+├── services/
+│   ├── priceOracle.js          # Fetch prices from PancakeSwap + Chainlink
+│   ├── tradeExecutor.js        # Execute swaps on PancakeSwap
+│   ├── gasManager.js           # Gas optimization & nonce management
+│   └── portfolioManager.js     # Track bot balances
+├── models/
+│   ├── Trade.js                # Trade history schema
+│   ├── PriceHistory.js         # Price data schema
+│   └── BotConfig.js            # Bot configuration schema
+└── utils/
+    └── calculations.js         # Price calculations & formulas
+```
+
+#### API Endpoints (api/src/routes/bot.js)
+
+**Price Endpoints:**
+
+- `POST /api/bot/prices/current` - Get current MWT prices (BNB/USD/BTC)
+- `POST /api/bot/prices/deviation` - Get peg deviation
+- `POST /api/bot/liquidity` - Get liquidity depth
+
+**Trade Endpoints:**
+
+- `POST /api/bot/trade/execute` - Execute trade (BUY/SELL)
+- `POST /api/bot/trade/estimate` - Estimate trade output
+- `GET /api/bot/trade/history` - Get trade history
+
+**Portfolio Endpoints:**
+
+- `GET /api/bot/balances` - Get bot wallet balances
+- `GET /api/bot/portfolio/status` - Get portfolio summary
+
+**Configuration Endpoints:**
+
+- `GET /api/bot/config` - Get bot configuration
+- `PUT /api/bot/config` - Update bot configuration
+
+**Safety Endpoints:**
+
+- `GET /api/bot/safety/status` - Get safety check status
+- `GET /api/bot/health` - Health check
+- `POST /api/bot/emergency/pause` - Emergency pause
+
+#### Required Contract ABIs
+
+Add to `api/contracts/abis/`:
+
+1. **IPancakeRouter.json** - PancakeSwap Router V2
+
+   - Router Address (BSC): `0x10ED43C718714eb63d5aA57B78B54704E256024E`
+   - Functions: `swapExactETHForTokens`, `swapExactTokensForETH`, `getAmountsOut`
+
+2. **IPancakePair.json** - PancakeSwap Pair
+
+   - MWT/BNB Pair: `0x9f55c42d54e07daa717f6458c8c5ed480b7592f0`
+   - Functions: `getReserves`, `token0`, `token1`
+
+3. **IChainlinkAggregator.json** - Chainlink Price Feeds
+   - BNB/USD Feed: `0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE`
+   - BTC/USD Feed: `0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf`
+   - Functions: `latestRoundData`, `decimals`
+
+#### Environment Variables
+
+```bash
+# Trading Bot Wallet (API-side)
+BOT_WALLET_ADDRESS=0x...
+BOT_WALLET_PRIVATE_KEY=0x...
+
+# PancakeSwap Contracts
+PANCAKE_ROUTER_ADDRESS=0x10ED43C718714eb63d5aA57B78B54704E256024E
+MWT_BNB_PAIR_ADDRESS=0x9f55c42d54e07daa717f6458c8c5ed480b7592f0
+WBNB_ADDRESS=0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c
+
+# Chainlink Oracles
+CHAINLINK_BNB_USD_FEED=0x0567F2323251f0Aab15c8dFb1967E4e8A7D42aeE
+CHAINLINK_BTC_USD_FEED=0x264990fbd0A4796A3E3d8E37C4d5F87a3aCa5Ebf
+
+# Bot Configuration
+TARGET_PEG_USD=0.01
+BOT_ENABLED=false
+```
+
+#### Key Services
+
+**PriceOracle Service:**
+
+- Fetch MWT/BNB price from PancakeSwap pair reserves
+- Fetch BNB/USD and BTC/USD from Chainlink oracles
+- Calculate derived prices: MWT/USD, MWT/BTC
+- Cache prices (1-minute duration) to reduce RPC calls
+- Validate prices for anomalies
+
+**Price Calculation Formulas:**
+
+```javascript
+// MWT/BNB from pair reserves
+mwtBnbPrice = bnbReserve / mwtReserve
+
+// MWT/USD
+mwtUsdPrice = mwtBnbPrice × bnbUsdPrice
+
+// MWT/BTC
+mwtBtcPrice = (mwtBnbPrice × bnbUsdPrice) ÷ btcUsdPrice
+
+// Satoshis
+satoshis = mwtBtcPrice × 100000000
+```
+
+**TradeExecutor Service:**
+
+- Execute BUY: `swapExactETHForTokens` (BNB → MWT)
+- Execute SELL: `swapExactTokensForETH` (MWT → BNB)
+- Manage token approvals
+- Optimize gas prices based on urgency
+- Handle nonce management
+- Retry logic with exponential backoff
+
+**Database Models:**
+
+1. **Trade Model:** Track all executed trades
+   - Fields: txHash, action, amounts, price, gas, status, profitLoss
+2. **PriceHistory Model:** Historical price data
+   - Fields: mwtBnb, bnbUsd, btcUsd, mwtUsd, mwtBtc, liquidity, deviation
+3. **BotConfig Model:** Bot configuration
+   - Fields: enabled, targetPeg, thresholds, limits, slippage, cooldown
+
+#### Implementation Phases
+
+**Phase 1.1: Setup & ABIs (Day 1-2)**
+
+- Add PancakeSwap Router ABI
+- Add PancakeSwap Pair ABI
+- Add Chainlink Aggregator ABI
+- Create directory structure
+
+**Phase 1.2: Price Oracle (Day 3-4)**
+
+- Implement `PriceOracle` service
+- Add price caching
+- Add price validation
+- Test on BSC mainnet
+
+**Phase 1.3: Trade Executor (Day 5-6)**
+
+- Implement `TradeExecutor` service
+- Add approval management
+- Add gas optimization
+- Test swaps on testnet
+
+**Phase 1.4: Database Models (Day 7)**
+
+- Create Trade model
+- Create PriceHistory model
+- Create BotConfig model
+
+**Phase 1.5: API Routes (Day 8-9)**
+
+- Implement all bot endpoints
+- Add authentication/authorization
+- Add rate limiting
+- Test all endpoints
+
+**Phase 1.6: Testing & Documentation (Day 10)**
+
+- Integration tests
+- API documentation
+- Deployment preparation
+
+### Part 2: Bot Project (Separate Implementation)
+
+The bot project will be a standalone Node.js application that:
+
+- Communicates with the API via HTTP
+- Implements trading strategies
+- Monitors prices continuously
+- Makes autonomous trading decisions
+- Handles safety checks and circuit breakers
+
+See separate bot implementation guide for details.

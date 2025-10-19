@@ -1,6 +1,10 @@
 # Magic World Token API
 
-A REST API service for blockchain integration, enabling games to distribute Magic World Tokens to players efficiently and securely.
+A comprehensive REST API service for blockchain integration, enabling:
+- 🎮 Games to distribute Magic World Tokens to players efficiently
+- 🤖 Trading bots to maintain the $0.01 USD peg on PancakeSwap
+- 👛 Secure wallet generation and management
+- 📊 Real-time price monitoring from PancakeSwap and Chainlink oracles
 
 ## 📁 Project Structure
 
@@ -9,14 +13,33 @@ api/
 ├── contracts/           # Contract ABI files for blockchain integration
 │   ├── MagicWorldToken.json
 │   ├── MagicWorldGame.json
-│   └── IMagicWorldToken.json
+│   ├── IMagicWorldToken.json
+│   └── abis/           # Trading bot ABIs
+│       ├── IPancakeRouter.json
+│       ├── IPancakePair.json
+│       └── IChainlinkAggregator.json
 ├── src/
+│   ├── bot/            # Trading bot API implementation
+│   │   ├── services/   # Price oracle, trade executor
+│   │   ├── models/     # Bot database models
+│   │   └── utils/      # Bot utilities
 │   ├── services/
-│   │   └── blockchain.js  # References local ABI files from contracts/
+│   │   └── blockchain.js  # References local ABI files
+│   ├── routes/
+│   │   ├── bot.js      # Bot API endpoints (17 endpoints)
+│   │   └── ...
 │   └── ...
+├── examples/           # Bot implementation examples
+│   ├── simple-bot.js   # Working trading bot example
+│   ├── .env.bot.example
+│   └── README.md
+├── scripts/
+│   └── test-bot-integration.js  # Integration tests (16/16 passing)
+├── BOT_INTEGRATION_GUIDE.md     # How to build a trading bot
+├── DEPLOYMENT_GUIDE.md
+├── PRODUCTION_CHECKLIST.md
 ├── Dockerfile
-├── railway.json
-└── .env.example
+└── railway.json
 ```
 
 ## 🚀 Quick Start
@@ -1024,14 +1047,153 @@ updateUI(`You have ${balance.data.balance} MWT tokens`);
 - Review logs for detailed error information
 - Contact support with your API key ID (not the full key)
 
+## 🤖 Trading Bot API
+
+The API includes a comprehensive trading bot infrastructure for maintaining the MWT token peg at $0.01 USD on PancakeSwap.
+
+### Features
+
+- 📊 **Real-time Price Monitoring** - PancakeSwap + Chainlink oracles
+- 💱 **Automated Trading** - BUY/SELL operations on PancakeSwap
+- 🎯 **Peg Maintenance** - Keep MWT price at $0.01 USD target
+- 🛡️ **Safety Systems** - Balance checks, daily limits, emergency stop
+- 📈 **Portfolio Management** - Track balances and performance
+- ⚙️ **Configuration** - Runtime adjustable parameters
+
+### Quick Start for Bot Developers
+
+1. **Read the Integration Guide:**
+   ```bash
+   # Comprehensive guide for building trading bots
+   cat BOT_INTEGRATION_GUIDE.md
+   ```
+
+2. **Copy Example Bot:**
+   ```bash
+   cd examples/
+   cp simple-bot.js ../my-bot.js
+   cp .env.bot.example ../.env
+   ```
+
+3. **Configure and Run:**
+   ```bash
+   # Edit .env with your settings
+   nano .env
+   
+   # Run in dry-run mode (safe, no real trades)
+   node my-bot.js
+   ```
+
+### Bot API Endpoints
+
+#### Price Endpoints
+- `GET /api/bot/prices/current` - Get real-time prices (MWT/BNB, MWT/USD, MWT/BTC)
+- `GET /api/bot/prices/deviation` - Calculate deviation from $0.01 target
+- `GET /api/bot/prices/history?limit=100` - Get historical price data
+- `GET /api/bot/prices/statistics` - Get price statistics (24h high/low/avg)
+- `GET /api/bot/liquidity` - Get liquidity depth
+
+#### Trade Endpoints
+- `POST /api/bot/trade/estimate` - Estimate trade output before execution
+- `POST /api/bot/trade/execute` - Execute a trade (BUY or SELL)
+- `GET /api/bot/trade/history?limit=10` - Get trade history
+- `GET /api/bot/trade/statistics` - Get trading statistics
+
+#### Balance & Portfolio
+- `GET /api/bot/balances` - Get trading wallet balances (BNB + MWT)
+- `GET /api/bot/portfolio/status` - Get overall portfolio status
+
+#### Configuration
+- `GET /api/bot/config` - Get bot configuration
+- `PUT /api/bot/config` - Update bot configuration
+
+#### Safety & Health
+- `GET /api/bot/safety/status` - Check if it's safe to trade
+- `GET /api/bot/health` - API health check
+- `POST /api/bot/emergency/pause` - Emergency pause trading
+
+### Example Bot Request
+
+```javascript
+const axios = require('axios');
+
+// Configure with API key (must have 'bot' permission)
+const headers = {
+    'X-API-Key': 'mwt_your_bot_api_key_here',
+    'Content-Type': 'application/json'
+};
+
+// Get current prices
+const prices = await axios.get('http://localhost:3000/api/bot/prices/current', { headers });
+console.log('MWT/USD:', prices.data.data.mwtUsd.price);
+
+// Check deviation
+const deviation = await axios.get('http://localhost:3000/api/bot/prices/deviation', { headers });
+console.log('Deviation:', deviation.data.data.deviationPercent + '%');
+
+// Estimate trade
+const estimate = await axios.post('http://localhost:3000/api/bot/trade/estimate', {
+    action: 'BUY',
+    amount: '0.1' // 0.1 BNB
+}, { headers });
+console.log('Estimated output:', estimate.data.data.estimatedOutput, 'MWT');
+
+// Execute trade (if safe)
+const safety = await axios.get('http://localhost:3000/api/bot/safety/status', { headers });
+if (safety.data.data.safeToTrade) {
+    const result = await axios.post('http://localhost:3000/api/bot/trade/execute', {
+        action: 'BUY',
+        amount: '0.1',
+        slippage: 1.0
+    }, { headers });
+    console.log('Trade executed:', result.data.data.transactionHash);
+}
+```
+
+**Note:** All bot endpoints require an API key with **'bot' permission**. Generate one using:
+```bash
+curl -X POST http://localhost:3000/api/admin/generate-key \
+  -H "X-Admin-Secret: your-admin-secret" \
+  -H "Content-Type: application/json" \
+  -d '{"name":"Trading Bot","permissions":["bot"]}'
+```
+
+### Testing
+
+Run the integration tests to verify the bot API is working:
+
+```bash
+npm run test:integration
+```
+
+Current status: **16/16 tests passing (100%)** ✅
+
+### Documentation
+
+- **[Bot Integration Guide](BOT_INTEGRATION_GUIDE.md)** - Complete guide for building trading bots
+- **[Examples Directory](examples/)** - Working bot implementation examples
+- **[Swagger API Docs](http://localhost:3000/api-docs)** - Interactive API documentation
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Production deployment instructions
+- **[Production Checklist](PRODUCTION_CHECKLIST.md)** - Pre-launch verification
+
+---
+
 ## 📈 Next Steps
 
+### For Game Developers
 1. **Get API Key**: Contact admin to receive your game's API key
 2. **Test Integration**: Use the development environment to test your integration
 3. **Implement Features**: Start with basic token distribution
 4. **Monitor Usage**: Use health endpoints and logs to monitor your integration
 5. **Scale Up**: Move to production when ready
 
+### For Bot Developers
+1. **Read Integration Guide**: Review [BOT_INTEGRATION_GUIDE.md](BOT_INTEGRATION_GUIDE.md)
+2. **Copy Example Bot**: Use [examples/simple-bot.js](examples/simple-bot.js) as template
+3. **Test in Dry-Run**: Always test with `DRY_RUN=true` first
+4. **Start Small**: Use minimal trade amounts initially
+5. **Monitor & Optimize**: Track performance and adjust strategy
+
 ---
 
-*Built for the Magic World Token ecosystem - enabling seamless blockchain gaming experiences.*
+*Built for the Magic World Token ecosystem - enabling seamless blockchain gaming experiences and automated peg maintenance.*

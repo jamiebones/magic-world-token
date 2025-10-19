@@ -8,6 +8,8 @@
         "dev": "nodemon src/index.js",
         "test": "jest",
         "test:watch": "jest --watch",
+        "test:integration": "node scripts/test-bot-integration.js",
+        "test:all": "npm run test:swagger && npm run test:integration",
         "lint": "eslint src/",
         "setup:mongo": "node setup-mongo.js"
     },

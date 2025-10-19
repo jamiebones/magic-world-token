@@ -15,6 +15,7 @@ const tokenRoutes = require('./routes/tokens');
 const playerRoutes = require('./routes/players');
 const healthRoutes = require('./routes/health');
 const adminRoutes = require('./routes/admin');
+const botRoutes = require('./routes/bot');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -68,6 +69,9 @@ app.use('/api/admin', adminRoutes);
 app.use('/api/tokens', authMiddleware, tokenRoutes);
 app.use('/api/players', authMiddleware, playerRoutes);
 
+// Bot routes (public access - bots will call these)
+app.use('/api/bot', botRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.json({
@@ -79,7 +83,8 @@ app.get('/', (req, res) => {
             health: '/health',
             admin: '/api/admin',
             tokens: '/api/tokens',
-            players: '/api/players'
+            players: '/api/players',
+            bot: '/api/bot'
         }
     });
 });
@@ -92,7 +97,7 @@ app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         message: `Cannot ${req.method} ${req.originalUrl}`,
-        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players']
+        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players', '/api/bot']
     });
 });
 
