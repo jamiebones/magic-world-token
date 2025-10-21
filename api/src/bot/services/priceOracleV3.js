@@ -262,23 +262,83 @@ class PriceOracleV3 {
         }
     }
 
-    /**
-     * Get price deviation from target peg
-     * @returns {Promise<Object>} Deviation info
-     */
-    async getDeviation() {
-        const prices = await this.getAllPrices();
+  /**
+   * Get price deviation from target peg
+   * @returns {Promise<Object>} Deviation info
+   */
+  async getDeviation() {
+    const prices = await this.getAllPrices();
+    
+    return {
+      currentPrice: prices.mwtUsd,
+      targetPrice: prices.targetPeg,
+      deviation: prices.deviation,
+      deviationPercentage: `${prices.deviation.toFixed(2)}%`,
+      isOverPeg: prices.deviation > 0,
+      isUnderPeg: prices.deviation < 0,
+      timestamp: prices.timestamp
+    };
+  }
 
-        return {
-            currentPrice: prices.mwtUsd,
-            targetPrice: prices.targetPeg,
-            deviation: prices.deviation,
-            deviationPercentage: `${prices.deviation.toFixed(2)}%`,
-            isOverPeg: prices.deviation > 0,
-            isUnderPeg: prices.deviation < 0,
-            timestamp: prices.timestamp
-        };
+  /**
+   * Get peg deviation (alias for compatibility)
+   * @param {number} targetPeg - Optional target peg override
+   * @returns {Promise<Object>} Deviation info
+   */
+  async getPegDeviation(targetPeg = null) {
+    const prices = await this.getAllPrices();
+    const target = targetPeg || prices.targetPeg;
+    const deviation = ((prices.mwtUsd - target) / target) * 100;
+    
+    return {
+      currentPrice: prices.mwtUsd,
+      targetPrice: target,
+      deviation: deviation,
+      deviationPercentage: `${deviation.toFixed(2)}%`,
+      isOverPeg: deviation > 0,
+      isUnderPeg: deviation < 0,
+      absoluteDeviation: Math.abs(deviation),
+      timestamp: prices.timestamp
+    };
+  }
+
+  /**
+   * Get liquidity depth for trading
+   * @returns {Promise<Object>} Liquidity info
+   */
+  async getLiquidityDepth() {
+    try {
+      const pool = new ethers.Contract(this.V3_POOL_ADDRESS, this.poolABI, this.provider);
+      const [liquidity, slot0] = await Promise.all([
+        pool.liquidity(),
+        pool.slot0()
+      ]);
+
+      const prices = await this.getAllPrices();
+
+      return {
+        totalLiquidity: liquidity.toString(),
+        currentTick: slot0.tick.toString(),
+        sqrtPriceX96: slot0.sqrtPriceX96.toString(),
+        mwtUsdPrice: prices.mwtUsd,
+        mwtBnbPrice: prices.mwtBnb,
+        poolType: 'V3',
+        poolAddress: this.V3_POOL_ADDRESS,
+        timestamp: Date.now()
+      };
+    } catch (error) {
+      console.error('Error fetching liquidity depth:', error);
+      throw new Error(`Failed to fetch liquidity depth: ${error.message}`);
     }
+  }
+
+  /**
+   * Get current prices (alias for compatibility)
+   * @returns {Promise<Object>} Current prices
+   */
+  async getCurrentPrices() {
+    return this.getAllPrices();
+  }
 }
 
 module.exports = PriceOracleV3;
