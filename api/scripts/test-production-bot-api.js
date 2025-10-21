@@ -51,7 +51,7 @@ async function testEndpoint(name, method, url, data = null, skipTest = false) {
             // Log key data points
             if (response.data.data) {
                 const data = response.data.data;
-                
+
                 // Pretty print relevant data
                 if (data.mwtUsd !== undefined) {
                     console.log(`\n   💰 PRICES:`);
@@ -59,7 +59,7 @@ async function testEndpoint(name, method, url, data = null, skipTest = false) {
                     console.log(`      MWT/BNB: ${data.mwtBnb?.toFixed(10) || data.mwtBnb} BNB`);
                     console.log(`      BNB/USD: $${data.bnbUsd?.toFixed(2) || data.bnbUsd}`);
                 }
-                
+
                 if (data.deviation !== undefined) {
                     console.log(`\n   📏 DEVIATION:`);
                     console.log(`      Current: $${data.currentPrice?.toFixed(8) || data.currentPrice}`);
@@ -67,19 +67,19 @@ async function testEndpoint(name, method, url, data = null, skipTest = false) {
                     console.log(`      Deviation: ${data.deviation?.toFixed(2) || data.deviation}%`);
                     console.log(`      Status: ${data.isOverPeg ? '⬆️ OVER PEG' : '⬇️ UNDER PEG'}`);
                 }
-                
+
                 if (data.liquidity !== undefined) {
                     console.log(`\n   💧 LIQUIDITY:`);
                     console.log(`      Total: ${data.liquidity}`);
                     console.log(`      Pool Type: ${data.poolType || 'V2'}`);
                 }
-                
+
                 if (data.balance !== undefined || data.bnb !== undefined) {
                     console.log(`\n   💰 BALANCES:`);
                     if (data.bnb) console.log(`      BNB: ${data.bnb} BNB`);
                     if (data.mwt) console.log(`      MWT: ${Number(data.mwt).toLocaleString()} MWT`);
                 }
-                
+
                 if (data.enabled !== undefined) {
                     console.log(`\n   ⚙️  BOT CONFIG:`);
                     console.log(`      Enabled: ${data.enabled ? '✅ YES' : '❌ NO'}`);
@@ -89,7 +89,7 @@ async function testEndpoint(name, method, url, data = null, skipTest = false) {
                         console.log(`      Sell Threshold: ${data.thresholds.sellDeviation}%`);
                     }
                 }
-                
+
                 if (data.isHealthy !== undefined) {
                     console.log(`\n   🏥 HEALTH:`);
                     console.log(`      Status: ${data.isHealthy ? '✅ HEALTHY' : '❌ UNHEALTHY'}`);
@@ -99,7 +99,7 @@ async function testEndpoint(name, method, url, data = null, skipTest = false) {
                         });
                     }
                 }
-                
+
                 if (Array.isArray(data) && data.length > 0) {
                     console.log(`\n   📊 DATA (${data.length} items):`);
                     console.log(`      First item:`, JSON.stringify(data[0], null, 2).split('\n').slice(0, 5).join('\n'));
