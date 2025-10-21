@@ -9,6 +9,7 @@ const express = require('express');
 const router = express.Router();
 const { authMiddleware, requirePermission } = require('../middleware/auth');
 const PriceOracle = require('../bot/services/priceOracle');
+const PriceOracleV3 = require('../bot/services/priceOracleV3');
 const TradeExecutor = require('../bot/services/tradeExecutor');
 const { Trade, PriceHistory, BotConfig } = require('../bot/models');
 const logger = require('../utils/logger');
@@ -18,9 +19,12 @@ const logger = require('../utils/logger');
 router.use(authMiddleware);
 router.use(requirePermission('bot'));
 
-// Initialize services
-const priceOracle = new PriceOracle();
+// Initialize services - use V3 oracle if IS_V3_POOL is true
+const isV3Pool = process.env.IS_V3_POOL === 'true';
+const priceOracle = isV3Pool ? new PriceOracleV3() : new PriceOracle();
 const tradeExecutor = new TradeExecutor();
+
+logger.info(`Bot initialized with ${isV3Pool ? 'V3' : 'V2'} price oracle`);
 
 // Middleware to check if bot is enabled
 const checkBotEnabled = async (req, res, next) => {
@@ -115,8 +119,6 @@ const checkBotEnabled = async (req, res, next) => {
 router.get('/prices/current', async (req, res) => {
     try {
         const prices = await priceOracle.getAllPrices();
-
-        // Return response immediately (skip database save for now to isolate the issue)
         return res.json({
             success: true,
             data: prices,
