@@ -64,8 +64,6 @@ const checkBotEnabled = async (req, res, next) => {
  *     tags: [Bot]
  *     security:
  *       - ApiKeyAuth: []
- *     security:
- *       - ApiKeyAuth: []
  *     responses:
  *       200:
  *         description: Current price data successfully retrieved

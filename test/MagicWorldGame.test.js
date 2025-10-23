@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
 describe("MagicWorldGame", function () {
-    let MagicWorldToken;
+    let MagicWorldGems;
     let MagicWorldGame;
     let token;
     let game;
@@ -21,8 +21,8 @@ describe("MagicWorldGame", function () {
         [owner, gameAdmin, distributor, player1, player2, player3] = await ethers.getSigners();
 
         // Deploy Token Contract
-        MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
+        MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        token = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
         await token.waitForDeployment();
 
         // Deploy Game Contract
@@ -51,7 +51,7 @@ describe("MagicWorldGame", function () {
 
     describe("Deployment", function () {
         it("Should set the correct token address", async function () {
-            expect(await game.magicWorldToken()).to.equal(await token.getAddress());
+            expect(await game.magicWorldGems()).to.equal(await token.getAddress());
         });
 
         it("Should have the correct initial settings", async function () {
@@ -365,7 +365,7 @@ describe("MagicWorldGame", function () {
 });
 
 describe("MagicWorldGame - Vault Initialization", function () {
-    let MagicWorldToken;
+    let MagicWorldGems;
     let MagicWorldGame;
     let token;
     let game;
@@ -380,8 +380,8 @@ describe("MagicWorldGame - Vault Initialization", function () {
         [owner, , distributor] = await ethers.getSigners();
 
         // Deploy Token Contract
-        MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
+        MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        token = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
         await token.waitForDeployment();
 
         // Deploy Game Contract

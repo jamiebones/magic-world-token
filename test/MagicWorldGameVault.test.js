@@ -3,7 +3,7 @@ const { ethers } = require("hardhat");
 
 describe("MagicWorldGame - Vault System", function () {
     let magicWorldGame;
-    let magicWorldToken;
+    let magicWorldGems;
     let owner, distributor, player1, player2, player3, player4, player5, player6;
     let initialSupply = ethers.parseEther("1000000"); // 1M tokens
     const TOKEN_NAME = "Magic World Token";
@@ -13,26 +13,26 @@ describe("MagicWorldGame - Vault System", function () {
         [owner, distributor, player1, player2, player3, player4, player5, player6] = await ethers.getSigners();
 
         // Deploy token contract
-        const MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        magicWorldToken = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
-        await magicWorldToken.waitForDeployment();
+        const MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        magicWorldGems = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
+        await magicWorldGems.waitForDeployment();
 
         // Deploy game contract
         const MagicWorldGame = await ethers.getContractFactory("MagicWorldGame");
-        magicWorldGame = await MagicWorldGame.deploy(await magicWorldToken.getAddress());
+        magicWorldGame = await MagicWorldGame.deploy(await magicWorldGems.getAddress());
         await magicWorldGame.waitForDeployment();
 
         // Transfer 90% to game contract (900K tokens for vaults)
         const gameAllocation = (initialSupply * 9n) / 10n; // 90%
-        await magicWorldToken.transfer(await magicWorldGame.getAddress(), gameAllocation);
+        await magicWorldGems.transfer(await magicWorldGame.getAddress(), gameAllocation);
 
         // Initialize vaults
         const partnerAllocation = initialSupply / 10n; // 10%
         await magicWorldGame.initializeVaults(initialSupply, partnerAllocation);
 
         // Grant GAME_OPERATOR_ROLE to game contract
-        const GAME_OPERATOR_ROLE = await magicWorldToken.GAME_OPERATOR_ROLE();
-        await magicWorldToken.grantRole(GAME_OPERATOR_ROLE, await magicWorldGame.getAddress());
+        const GAME_OPERATOR_ROLE = await magicWorldGems.GAME_OPERATOR_ROLE();
+        await magicWorldGems.grantRole(GAME_OPERATOR_ROLE, await magicWorldGame.getAddress());
 
         // Grant distributor role
         await magicWorldGame.grantDistributorRole(distributor.address);
@@ -65,17 +65,17 @@ describe("MagicWorldGame - Vault System", function () {
 
         it("Should emit VaultsInitialized event", async function () {
             // Deploy a fresh contract instance for this test
-            const MagicWorldTokenFresh = await ethers.getContractFactory("MagicWorldToken");
-            const magicWorldTokenFresh = await MagicWorldTokenFresh.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
-            await magicWorldTokenFresh.waitForDeployment();
+            const MagicWorldGemsFresh = await ethers.getContractFactory("MagicWorldGems");
+            const magicWorldGemsFresh = await MagicWorldGemsFresh.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
+            await magicWorldGemsFresh.waitForDeployment();
 
             const MagicWorldGameFresh = await ethers.getContractFactory("MagicWorldGame");
-            const magicWorldGameFresh = await MagicWorldGameFresh.deploy(await magicWorldTokenFresh.getAddress());
+            const magicWorldGameFresh = await MagicWorldGameFresh.deploy(await magicWorldGemsFresh.getAddress());
             await magicWorldGameFresh.waitForDeployment();
 
             // Transfer tokens to fresh game contract
             const gameAllocation = (initialSupply * 9n) / 10n;
-            await magicWorldTokenFresh.transfer(await magicWorldGameFresh.getAddress(), gameAllocation);
+            await magicWorldGemsFresh.transfer(await magicWorldGameFresh.getAddress(), gameAllocation);
 
             const totalSupply = initialSupply;
             const partnerAllocation = totalSupply / 10n;
@@ -87,17 +87,17 @@ describe("MagicWorldGame - Vault System", function () {
 
         it("Should only allow admin to initialize vaults", async function () {
             // Deploy a fresh contract instance for this test
-            const MagicWorldTokenFresh = await ethers.getContractFactory("MagicWorldToken");
-            const magicWorldTokenFresh = await MagicWorldTokenFresh.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
-            await magicWorldTokenFresh.waitForDeployment();
+            const MagicWorldGemsFresh = await ethers.getContractFactory("MagicWorldGems");
+            const magicWorldGemsFresh = await MagicWorldGemsFresh.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
+            await magicWorldGemsFresh.waitForDeployment();
 
             const MagicWorldGameFresh = await ethers.getContractFactory("MagicWorldGame");
-            const magicWorldGameFresh = await MagicWorldGameFresh.deploy(await magicWorldTokenFresh.getAddress());
+            const magicWorldGameFresh = await MagicWorldGameFresh.deploy(await magicWorldGemsFresh.getAddress());
             await magicWorldGameFresh.waitForDeployment();
 
             // Transfer tokens to fresh game contract
             const gameAllocation = (initialSupply * 9n) / 10n;
-            await magicWorldTokenFresh.transfer(await magicWorldGameFresh.getAddress(), gameAllocation);
+            await magicWorldGemsFresh.transfer(await magicWorldGameFresh.getAddress(), gameAllocation);
 
             await expect(magicWorldGameFresh.connect(distributor).initializeVaults(initialSupply, initialSupply / 10n))
                 .to.be.revertedWithCustomError(magicWorldGameFresh, "AccessControlUnauthorizedAccount");
@@ -127,8 +127,8 @@ describe("MagicWorldGame - Vault System", function () {
                 expect(finalVault.remaining).to.equal(initialVault.remaining - rewardAmount * 2n);
 
                 // Check players received tokens
-                expect(await magicWorldToken.balanceOf(player1.address)).to.equal(rewardAmount);
-                expect(await magicWorldToken.balanceOf(player2.address)).to.equal(rewardAmount);
+                expect(await magicWorldGems.balanceOf(player1.address)).to.equal(rewardAmount);
+                expect(await magicWorldGems.balanceOf(player2.address)).to.equal(rewardAmount);
             });
 
             it("Should reject distribution exceeding vault balance", async function () {
@@ -180,7 +180,7 @@ describe("MagicWorldGame - Vault System", function () {
 
                 // Check all players received equal amounts
                 for (const recipient of recipients) {
-                    expect(await magicWorldToken.balanceOf(recipient)).to.equal(amount);
+                    expect(await magicWorldGems.balanceOf(recipient)).to.equal(amount);
                 }
             });
 
@@ -248,7 +248,7 @@ describe("MagicWorldGame - Vault System", function () {
                 vaultType, [player3.address], amount, "Another reward"
             );
 
-            expect(await magicWorldToken.balanceOf(player3.address)).to.equal(amount * 2n);
+            expect(await magicWorldGems.balanceOf(player3.address)).to.equal(amount * 2n);
         });
 
         it("Should update player statistics", async function () {

@@ -1,8 +1,8 @@
 /**
- * Add Liquidity to MWT/BNB PancakeSwap Pair
+ * Add Liquidity to MWG/BNB PancakeSwap Pair
  * 
- * This script adds liquidity to the MWT/BNB pair on PancakeSwap to achieve
- * the target peg price of $0.01 per MWT token.
+ * This script adds liquidity to the MWG/BNB pair on PancakeSwap to achieve
+ * the target peg price of $0.01 per MWG token.
  * 
  * Usage:
  *   node scripts/add-liquidity.js --bnb <amount> --dry-run
@@ -108,11 +108,11 @@ class LiquidityManager {
     }
 
     /**
-     * Calculate required MWT tokens for target price
-     * Formula: MWT/BNB = BNB_reserve / MWT_reserve
-     * Therefore: MWT_reserve = BNB_reserve / (MWT/BNB)
+     * Calculate required MWG tokens for target price
+     * Formula: MWG/BNB = BNB_reserve / MWG_reserve
+     * Therefore: MWG_reserve = BNB_reserve / (MWT/BNB)
      * 
-     * Where MWT/BNB = Target_USD / BNB_USD
+     * Where MWG/BNB = Target_USD / BNB_USD
      */
     async calculateRequiredTokens(bnbAmount) {
         const bnbUsdPrice = await this.getBNBUSDPrice();
@@ -122,13 +122,13 @@ class LiquidityManager {
         const currentBNB = parseFloat(reserves.bnbReserve);
         const totalBNB = currentBNB + bnbAmount;
 
-        // Calculate target MWT/BNB price
+        // Calculate target MWG/BNB price
         const targetMWTBNBPrice = this.targetPegUSD / bnbUsdPrice;
 
-        // Calculate total MWT needed to achieve target price
+        // Calculate total MWG needed to achieve target price
         const totalMWTNeeded = totalBNB / targetMWTBNBPrice;
 
-        // Calculate how much MWT to add (subtract current reserve)
+        // Calculate how much MWG to add (subtract current reserve)
         const currentMWT = parseFloat(reserves.mwtReserve);
         const mwtToAdd = totalMWTNeeded - currentMWT;
 
@@ -147,22 +147,22 @@ class LiquidityManager {
     }
 
     /**
-     * Calculate required BNB for target price based on MWT amount
-     * Formula: For target price, BNB_reserve = MWT_reserve × (Target_USD / BNB_USD)
+     * Calculate required BNB for target price based on MWG amount
+     * Formula: For target price, BNB_reserve = MWG_reserve × (Target_USD / BNB_USD)
      */
     async calculateRequiredBNB(mwtAmount) {
         const bnbUsdPrice = await this.getBNBUSDPrice();
         const reserves = await this.getCurrentReserves();
 
-        // Calculate what the total MWT reserve will be after adding liquidity
+        // Calculate what the total MWG reserve will be after adding liquidity
         const currentMWT = parseFloat(reserves.mwtReserve);
         const totalMWT = currentMWT + mwtAmount;
 
-        // Calculate target MWT/BNB price
+        // Calculate target MWG/BNB price
         const targetMWTBNBPrice = this.targetPegUSD / bnbUsdPrice;
 
         // Calculate total BNB needed to achieve target price
-        // MWT/BNB = BNB / MWT, so BNB = MWT × (MWT/BNB)
+        // MWG/BNB = BNB / MWG, so BNB = MWG × (MWT/BNB)
         const totalBNBNeeded = totalMWT * targetMWTBNBPrice;
 
         // Calculate how much BNB to add (subtract current reserve)
@@ -211,7 +211,7 @@ class LiquidityManager {
     }
 
     /**
-     * Approve MWT tokens for PancakeSwap Router
+     * Approve MWG tokens for PancakeSwap Router
      */
     async approveTokens(amount) {
         const amountWei = ethers.parseEther(amount.toString());
@@ -225,7 +225,7 @@ class LiquidityManager {
             return true;
         }
 
-        console.log(`\n📝 Approving ${amount.toLocaleString()} MWT tokens...`);
+        console.log(`\n📝 Approving ${amount.toLocaleString()} MWG tokens...`);
         const tx = await this.tokenContract.approve(
             process.env.PANCAKE_ROUTER_ADDRESS,
             amountWei
@@ -255,7 +255,7 @@ class LiquidityManager {
         const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
 
         console.log(`\n💧 Adding liquidity to PancakeSwap...`);
-        console.log(`   MWT: ${mwtAmount.toLocaleString()}`);
+        console.log(`   MWG: ${mwtAmount.toLocaleString()}`);
         console.log(`   BNB: ${bnbAmount}`);
         console.log(`   Slippage: ${(slippageTolerance * 100).toFixed(1)}%`);
 
@@ -290,27 +290,27 @@ class LiquidityManager {
         console.log('\n📊 CURRENT STATE:');
         console.log(`   BNB/USD Price: $${calculations.bnbUsdPrice.toFixed(2)}`);
         console.log(`   Current BNB Reserve: ${calculations.currentBNB.toFixed(6)} BNB`);
-        console.log(`   Current MWT Reserve: ${calculations.currentMWT.toLocaleString()} MWT`);
-        console.log(`   Current MWT/BNB: ${(calculations.currentBNB / calculations.currentMWT).toFixed(10)}`);
-        console.log(`   Current MWT/USD: $${((calculations.currentBNB / calculations.currentMWT) * calculations.bnbUsdPrice).toFixed(2)}`);
+        console.log(`   Current MWG Reserve: ${calculations.currentMWT.toLocaleString()} MWG`);
+        console.log(`   Current MWG/BNB: ${(calculations.currentBNB / calculations.currentMWT).toFixed(10)}`);
+        console.log(`   Current MWG/USD: $${((calculations.currentBNB / calculations.currentMWT) * calculations.bnbUsdPrice).toFixed(2)}`);
 
         console.log('\n🎯 TARGET STATE:');
         console.log(`   Target Peg: $${this.targetPegUSD}`);
-        console.log(`   Target MWT/BNB: ${calculations.targetMWTBNBPrice.toFixed(10)}`);
+        console.log(`   Target MWG/BNB: ${calculations.targetMWTBNBPrice.toFixed(10)}`);
 
         console.log('\n➕ LIQUIDITY TO ADD:');
         console.log(`   BNB: ${calculations.bnbToAdd.toFixed(6)} BNB (~$${(calculations.bnbToAdd * calculations.bnbUsdPrice).toFixed(2)})`);
-        console.log(`   MWT: ${calculations.mwtToAdd.toLocaleString()} MWT`);
+        console.log(`   MWG: ${calculations.mwtToAdd.toLocaleString()} MWG`);
 
         console.log('\n📈 AFTER LIQUIDITY ADDITION:');
         console.log(`   Total BNB Reserve: ${calculations.totalBNB.toFixed(6)} BNB`);
-        console.log(`   Total MWT Reserve: ${calculations.totalMWT.toLocaleString()} MWT`);
-        console.log(`   Expected MWT/USD: $${calculations.expectedMWTUSDPrice.toFixed(4)}`);
+        console.log(`   Total MWG Reserve: ${calculations.totalMWT.toLocaleString()} MWG`);
+        console.log(`   Expected MWG/USD: $${calculations.expectedMWTUSDPrice.toFixed(4)}`);
         console.log(`   Total Liquidity: ~$${calculations.liquidityValueUSD.toFixed(2)}`);
 
         console.log('\n💰 WALLET BALANCES:');
         console.log(`   BNB: ${balances.bnb.balance.toFixed(6)} (need ${balances.bnb.needed.toFixed(6)}) ${balances.bnb.sufficient ? '✅' : '❌'}`);
-        console.log(`   MWT: ${balances.mwt.balance.toLocaleString()} (need ${balances.mwt.needed.toLocaleString()}) ${balances.mwt.sufficient ? '✅' : '❌'}`);
+        console.log(`   MWG: ${balances.mwt.balance.toLocaleString()} (need ${balances.mwt.needed.toLocaleString()}) ${balances.mwt.sufficient ? '✅' : '❌'}`);
 
         if (balances.bnb.sufficient && balances.mwt.sufficient) {
             console.log('\n✅ Sufficient balances available');
@@ -320,7 +320,7 @@ class LiquidityManager {
                 console.log(`   Need ${(balances.bnb.needed - balances.bnb.balance).toFixed(6)} more BNB`);
             }
             if (!balances.mwt.sufficient) {
-                console.log(`   Need ${(balances.mwt.needed - balances.mwt.balance).toLocaleString()} more MWT`);
+                console.log(`   Need ${(balances.mwt.needed - balances.mwt.balance).toLocaleString()} more MWG`);
             }
         }
 
@@ -366,7 +366,7 @@ async function main() {
     const mode = bnbAmount ? 'BNB' : 'MWT';
     const amount = bnbAmount || mwtAmount;
 
-    console.log('\n🚀 MWT Liquidity Manager');
+    console.log('\n🚀 MWG Liquidity Manager');
     console.log(`   Network: BSC Mainnet`);
     console.log(`   Wallet: ${process.env.BOT_WALLET_ADDRESS}`);
     console.log(`   Mode: ${execute ? 'EXECUTE' : 'DRY RUN'}`);
@@ -424,9 +424,9 @@ async function main() {
         const newMWTUSDPrice = newMWTBNBPrice * bnbUsdPrice;
 
         console.log(`\n📊 NEW POOL STATE:`);
-        console.log(`   MWT Reserve: ${parseFloat(newReserves.mwtReserve).toLocaleString()} MWT`);
+        console.log(`   MWG Reserve: ${parseFloat(newReserves.mwtReserve).toLocaleString()} MWG`);
         console.log(`   BNB Reserve: ${parseFloat(newReserves.bnbReserve).toFixed(6)} BNB`);
-        console.log(`   MWT/USD Price: $${newMWTUSDPrice.toFixed(6)}`);
+        console.log(`   MWG/USD Price: $${newMWTUSDPrice.toFixed(6)}`);
         console.log(`   Deviation from $${manager.targetPegUSD}: ${(((newMWTUSDPrice - manager.targetPegUSD) / manager.targetPegUSD) * 100).toFixed(2)}%`);
 
         console.log('\n✅ Liquidity addition complete!');

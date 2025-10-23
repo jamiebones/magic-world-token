@@ -3,7 +3,7 @@ const { ethers } = require("hardhat");
 
 describe("PartnerVault", function () {
     let partnerVault;
-    let magicWorldToken;
+    let magicWorldGems;
     let owner, admin, partner1, partner2, partner3;
     let initialSupply = ethers.parseEther("1000000"); // 1M tokens
     const TOKEN_NAME = "Magic World Token";
@@ -13,28 +13,28 @@ describe("PartnerVault", function () {
         [owner, admin, partner1, partner2, partner3] = await ethers.getSigners();
 
         // Deploy token contract
-        const MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        magicWorldToken = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
-        await magicWorldToken.waitForDeployment();
+        const MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        magicWorldGems = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, initialSupply);
+        await magicWorldGems.waitForDeployment();
 
         // Deploy partner vault
         const PartnerVault = await ethers.getContractFactory("PartnerVault");
-        partnerVault = await PartnerVault.deploy(await magicWorldToken.getAddress());
+        partnerVault = await PartnerVault.deploy(await magicWorldGems.getAddress());
         await partnerVault.waitForDeployment();
 
         // Transfer 10% to partner vault (100K tokens)
         const partnerAllocation = initialSupply / 10n; // 10%
-        await magicWorldToken.transfer(await partnerVault.getAddress(), partnerAllocation);
+        await magicWorldGems.transfer(await partnerVault.getAddress(), partnerAllocation);
     });
 
     describe("Deployment", function () {
         it("Should set the correct token address", async function () {
-            expect(await partnerVault.token()).to.equal(await magicWorldToken.getAddress());
+            expect(await partnerVault.token()).to.equal(await magicWorldGems.getAddress());
         });
 
         it("Should have correct initial balance", async function () {
             const expectedBalance = initialSupply / 10n;
-            expect(await magicWorldToken.balanceOf(await partnerVault.getAddress())).to.equal(expectedBalance);
+            expect(await magicWorldGems.balanceOf(await partnerVault.getAddress())).to.equal(expectedBalance);
         });
 
         it("Should grant admin role to deployer", async function () {
@@ -95,12 +95,12 @@ describe("PartnerVault", function () {
             await ethers.provider.send("evm_increaseTime", [3 * 365 * 24 * 60 * 60]);
             await ethers.provider.send("evm_mine");
 
-            const initialBalance = await magicWorldToken.balanceOf(partner1.address);
+            const initialBalance = await magicWorldGems.balanceOf(partner1.address);
 
             await expect(partnerVault.connect(partner1).withdraw())
                 .to.emit(partnerVault, "PartnerWithdrawn");
 
-            const finalBalance = await magicWorldToken.balanceOf(partner1.address);
+            const finalBalance = await magicWorldGems.balanceOf(partner1.address);
             expect(finalBalance - initialBalance).to.equal(allocation);
 
             const partnerAllocation = await partnerVault.partnerAllocations(partner1.address);
@@ -173,11 +173,11 @@ describe("PartnerVault", function () {
             await ethers.provider.send("evm_increaseTime", [3 * 365 * 24 * 60 * 60]);
             await ethers.provider.send("evm_mine");
 
-            const initialBalance = await magicWorldToken.balanceOf(partner1.address);
+            const initialBalance = await magicWorldGems.balanceOf(partner1.address);
 
             await partnerVault.emergencyWithdraw(partner1.address);
 
-            const finalBalance = await magicWorldToken.balanceOf(partner1.address);
+            const finalBalance = await magicWorldGems.balanceOf(partner1.address);
             expect(finalBalance - initialBalance).to.equal(allocation);
 
             const partnerAllocation = await partnerVault.partnerAllocations(partner1.address);

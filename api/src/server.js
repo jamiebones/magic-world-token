@@ -16,6 +16,7 @@ const playerRoutes = require('./routes/players');
 const healthRoutes = require('./routes/health');
 const adminRoutes = require('./routes/admin');
 const botRoutes = require('./routes/bot');
+const merkleRoutes = require('./routes/merkle');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -72,10 +73,13 @@ app.use('/api/players', authMiddleware, playerRoutes);
 // Bot routes (public access - bots will call these)
 app.use('/api/bot', botRoutes);
 
+// Merkle distribution routes (mixed auth - public reads, admin writes)
+app.use('/api/merkle', merkleRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.json({
-        name: 'Magic World Token API',
+        name: 'Magic World GEMS API',
         version: '1.0.0',
         status: 'running',
         documentation: process.env.NODE_ENV !== 'production' ? '/api-docs' : 'Contact admin for documentation',
@@ -84,7 +88,8 @@ app.get('/', (req, res) => {
             admin: '/api/admin',
             tokens: '/api/tokens',
             players: '/api/players',
-            bot: '/api/bot'
+            bot: '/api/bot',
+            merkle: '/api/merkle'
         }
     });
 });
@@ -97,7 +102,7 @@ app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         message: `Cannot ${req.method} ${req.originalUrl}`,
-        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players', '/api/bot']
+        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players', '/api/bot', '/api/merkle']
     });
 });
 

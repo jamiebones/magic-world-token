@@ -47,7 +47,7 @@ async function validateDeployment(contract, contractName) {
 
 async function main() {
     console.log("╔════════════════════════════════════════════════════════╗");
-    console.log("║   Magic World Token Deployment Script                 ║");
+    console.log("║   Magic World Gems Deployment Script                 ║");
     console.log("╚════════════════════════════════════════════════════════╝\n");
 
     // Get network info
@@ -66,8 +66,8 @@ async function main() {
 
 
     // Token configuration from environment or defaults
-    const TOKEN_NAME = process.env.TOKEN_NAME || "Magic World Token";
-    const TOKEN_SYMBOL = process.env.TOKEN_SYMBOL || "MWT";
+    const TOKEN_NAME = process.env.TOKEN_NAME || "Magic World Gems";
+    const TOKEN_SYMBOL = process.env.TOKEN_SYMBOL || "MWG";
     const TOKEN_DECIMALS = process.env.TOKEN_DECIMALS || 18;
     const INITIAL_SUPPLY = process.env.INITIAL_SUPPLY
         ? BigInt(process.env.INITIAL_SUPPLY)
@@ -83,14 +83,14 @@ async function main() {
 
     // Deploy Token Contract
     console.log("╔════════════════════════════════════════════════════════╗");
-    console.log("║   Step 1: Deploy MagicWorldToken                      ║");
+    console.log("║   Step 1: Deploy MagicWorldGems                      ║");
     console.log("╚════════════════════════════════════════════════════════╝");
 
-    const MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
+    const MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
     console.log("  Deploying contract...");
-    const token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, INITIAL_SUPPLY);
+    const token = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, INITIAL_SUPPLY);
     await token.waitForDeployment();
-    const tokenAddress = await validateDeployment(token, "MagicWorldToken");
+    const tokenAddress = await validateDeployment(token, "MagicWorldGems");
     console.log(`  Address: ${tokenAddress}\n`);
 
     // Deploy Game Contract
@@ -125,19 +125,19 @@ async function main() {
     console.log("╔════════════════════════════════════════════════════════╗");
     console.log("║   Token Allocation Plan                                ║");
     console.log("╚════════════════════════════════════════════════════════╝");
-    console.log(`Total Supply:         ${ethers.formatEther(INITIAL_SUPPLY)} MWT (100%)`);
-    console.log(`Partner Allocation:   ${ethers.formatEther(PARTNER_ALLOCATION)} MWT (10%)`);
-    console.log(`Game Allocation:      ${ethers.formatEther(GAME_ALLOCATION)} MWT (90%)`);
-    console.log(`  ├─ Player Tasks:    ${ethers.formatEther(GAME_ALLOCATION * 50n / 100n)} MWT (50%)`);
-    console.log(`  ├─ Social Followers: ${ethers.formatEther(GAME_ALLOCATION * 5n / 100n)} MWT (5%)`);
-    console.log(`  ├─ Social Posters:  ${ethers.formatEther(GAME_ALLOCATION * 15n / 100n)} MWT (15%)`);
-    console.log(`  └─ Ecosystem Fund:  ${ethers.formatEther(GAME_ALLOCATION * 30n / 100n)} MWT (30%)\n`);
+    console.log(`Total Supply:         ${ethers.formatEther(INITIAL_SUPPLY)} MWG (100%)`);
+    console.log(`Partner Allocation:   ${ethers.formatEther(PARTNER_ALLOCATION)} MWG (10%)`);
+    console.log(`Game Allocation:      ${ethers.formatEther(GAME_ALLOCATION)} MWG (90%)`);
+    console.log(`  ├─ Player Tasks:    ${ethers.formatEther(GAME_ALLOCATION * 50n / 100n)} MWG (50%)`);
+    console.log(`  ├─ Social Followers: ${ethers.formatEther(GAME_ALLOCATION * 5n / 100n)} MWG (5%)`);
+    console.log(`  ├─ Social Posters:  ${ethers.formatEther(GAME_ALLOCATION * 15n / 100n)} MWG (15%)`);
+    console.log(`  └─ Ecosystem Fund:  ${ethers.formatEther(GAME_ALLOCATION * 30n / 100n)} MWG (30%)\n`);
 
     // Transfer partner allocation to Partner Vault
     console.log("╔════════════════════════════════════════════════════════╗");
     console.log("║   Step 4: Transfer Tokens to PartnerVault             ║");
     console.log("╚════════════════════════════════════════════════════════╝");
-    console.log(`  Transferring ${ethers.formatEther(PARTNER_ALLOCATION)} MWT...`);
+    console.log(`  Transferring ${ethers.formatEther(PARTNER_ALLOCATION)} MWG...`);
     const partnerTransferTx = await token.transfer(partnerVaultAddress, PARTNER_ALLOCATION);
     await waitForConfirmations(partnerTransferTx);
 
@@ -152,7 +152,7 @@ async function main() {
     console.log("╔════════════════════════════════════════════════════════╗");
     console.log("║   Step 5: Transfer Tokens to Game Contract            ║");
     console.log("╚════════════════════════════════════════════════════════╝");
-    console.log(`  Transferring ${ethers.formatEther(GAME_ALLOCATION)} MWT...`);
+    console.log(`  Transferring ${ethers.formatEther(GAME_ALLOCATION)} MWG...`);
     const gameTransferTx = await token.transfer(gameAddress, GAME_ALLOCATION);
     await waitForConfirmations(gameTransferTx);
 
@@ -252,7 +252,7 @@ async function main() {
     console.log("╚════════════════════════════════════════════════════════╝");
 
     // Transfer Game Contract admin to ADMIN_WALLET_ADDRESS
-    console.log(`  Transferring Game Contract DEFAULT_ADMIN_ROLE to admin wallet...`);
+    console.log(`  Transferring Game Contract roles to admin wallet...`);
     const DEFAULT_ADMIN_ROLE = await game.DEFAULT_ADMIN_ROLE();
 
     // Grant DEFAULT_ADMIN_ROLE to admin wallet
@@ -260,11 +260,19 @@ async function main() {
     await waitForConfirmations(grantGameDefaultAdminTx);
     console.log(`  ✅ Game Contract DEFAULT_ADMIN_ROLE granted to admin wallet`);
 
-    // Revoke deployer's DEFAULT_ADMIN_ROLE from Game Contract
-    console.log(`  Revoking deployer's DEFAULT_ADMIN_ROLE from Game Contract...`);
+    // Revoke deployer's roles from Game Contract
+    // IMPORTANT: Revoke other roles BEFORE DEFAULT_ADMIN_ROLE
+    console.log(`  Revoking deployer's roles from Game Contract...`);
+    const revokeGameAdminRoleTx = await game.revokeRole(GAME_ADMIN_ROLE, deployer.address);
+    await waitForConfirmations(revokeGameAdminRoleTx);
+
+    const revokeRewardDistributorTx = await game.revokeRole(REWARD_DISTRIBUTOR_ROLE, deployer.address);
+    await waitForConfirmations(revokeRewardDistributorTx);
+
+    // Revoke DEFAULT_ADMIN_ROLE last
     const revokeGameAdminTx = await game.revokeRole(DEFAULT_ADMIN_ROLE, deployer.address);
     await waitForConfirmations(revokeGameAdminTx);
-    console.log(`  ✅ Deployer's Game Contract admin role revoked`);
+    console.log(`  ✅ Deployer's Game Contract roles revoked (GAME_ADMIN, REWARD_DISTRIBUTOR, DEFAULT_ADMIN)`);
 
     // Transfer PartnerVault admin to ADMIN_WALLET_ADDRESS
     console.log(`  Transferring PartnerVault roles to admin wallet...`);
@@ -283,29 +291,44 @@ async function main() {
     console.log(`  ✅ PartnerVault DEFAULT_ADMIN_ROLE granted to admin wallet`);
     console.log(`  ✅ PartnerVault ADMIN_ROLE granted to admin wallet`);
 
-    // Revoke deployer's roles from PartnerVault (sequential)
+    // Revoke deployer's roles from PartnerVault
+    // IMPORTANT: Revoke ADMIN_ROLE BEFORE DEFAULT_ADMIN_ROLE
     console.log(`  Revoking deployer's roles from PartnerVault...`);
-    const revokeVaultDefaultAdminTx = await partnerVault.revokeRole(VAULT_DEFAULT_ADMIN_ROLE, deployer.address);
-    await waitForConfirmations(revokeVaultDefaultAdminTx);
-
     const revokeVaultAdminRoleTx = await partnerVault.revokeRole(VAULT_ADMIN_ROLE, deployer.address);
     await waitForConfirmations(revokeVaultAdminRoleTx);
-    console.log(`  ✅ Deployer's PartnerVault roles revoked`);
+
+    // Revoke DEFAULT_ADMIN_ROLE last
+    const revokeVaultDefaultAdminTx = await partnerVault.revokeRole(VAULT_DEFAULT_ADMIN_ROLE, deployer.address);
+    await waitForConfirmations(revokeVaultDefaultAdminTx);
+    console.log(`  ✅ Deployer's PartnerVault roles revoked (ADMIN, DEFAULT_ADMIN)`);
 
     // Transfer Token Contract admin to ADMIN_WALLET_ADDRESS
-    console.log(`  Transferring Token Contract DEFAULT_ADMIN_ROLE to admin wallet...`);
+    console.log(`  Transferring Token Contract roles to admin wallet...`);
     const TOKEN_DEFAULT_ADMIN_ROLE = await token.DEFAULT_ADMIN_ROLE();
+    const BLACKLIST_MANAGER_ROLE = await token.BLACKLIST_MANAGER_ROLE();
 
-    // Grant DEFAULT_ADMIN_ROLE to admin wallet
+    // Grant roles to admin wallet
     const grantTokenDefaultAdminTx = await token.grantRole(TOKEN_DEFAULT_ADMIN_ROLE, adminWalletAddress);
     await waitForConfirmations(grantTokenDefaultAdminTx);
-    console.log(`  ✅ Token Contract DEFAULT_ADMIN_ROLE granted to admin wallet`);
 
-    // Revoke deployer's DEFAULT_ADMIN_ROLE from Token Contract
-    console.log(`  Revoking deployer's DEFAULT_ADMIN_ROLE from Token Contract...`);
+    const grantBlacklistManagerTx = await token.grantRole(BLACKLIST_MANAGER_ROLE, adminWalletAddress);
+    await waitForConfirmations(grantBlacklistManagerTx);
+    console.log(`  ✅ Token Contract DEFAULT_ADMIN_ROLE granted to admin wallet`);
+    console.log(`  ✅ Token Contract BLACKLIST_MANAGER_ROLE granted to admin wallet`);
+
+    // Revoke deployer's roles from Token Contract
+    // IMPORTANT: Revoke other roles BEFORE DEFAULT_ADMIN_ROLE
+    console.log(`  Revoking deployer's roles from Token Contract...`);
+    const revokeTokenPauseTx = await token.revokeRole(PAUSE_ROLE, deployer.address);
+    await waitForConfirmations(revokeTokenPauseTx);
+
+    const revokeBlacklistManagerTx = await token.revokeRole(BLACKLIST_MANAGER_ROLE, deployer.address);
+    await waitForConfirmations(revokeBlacklistManagerTx);
+
+    // Revoke DEFAULT_ADMIN_ROLE last
     const revokeTokenAdminTx = await token.revokeRole(TOKEN_DEFAULT_ADMIN_ROLE, deployer.address);
     await waitForConfirmations(revokeTokenAdminTx);
-    console.log(`  ✅ Deployer's Token Contract admin role revoked\n`);
+    console.log(`  ✅ Deployer's Token Contract roles revoked (PAUSE, BLACKLIST_MANAGER, DEFAULT_ADMIN)\n`);
 
     // Verify balances and vault allocations
     console.log("╔════════════════════════════════════════════════════════╗");
@@ -317,17 +340,17 @@ async function main() {
     const deployerBalance = await token.balanceOf(deployer.address);
 
     console.log("Token Balances:");
-    console.log(`  Game Contract:    ${ethers.formatEther(finalGameBalance)} MWT`);
-    console.log(`  Partner Vault:    ${ethers.formatEther(finalPartnerVaultBalance)} MWT`);
-    console.log(`  Deployer:         ${ethers.formatEther(deployerBalance)} MWT`);
+    console.log(`  Game Contract:    ${ethers.formatEther(finalGameBalance)} MWG`);
+    console.log(`  Partner Vault:    ${ethers.formatEther(finalPartnerVaultBalance)} MWG`);
+    console.log(`  Deployer:         ${ethers.formatEther(deployerBalance)} MWG`);
 
     // Verify vault allocations
     const [playerTasks, socialFollowers, socialPosters, ecosystemFund] = await game.getAllVaultStats();
     console.log("\nVault Allocations:");
-    console.log(`  Player Tasks:     ${ethers.formatEther(playerTasks.totalAllocated)} MWT`);
-    console.log(`  Social Followers: ${ethers.formatEther(socialFollowers.totalAllocated)} MWT`);
-    console.log(`  Social Posters:   ${ethers.formatEther(socialPosters.totalAllocated)} MWT`);
-    console.log(`  Ecosystem Fund:   ${ethers.formatEther(ecosystemFund.totalAllocated)} MWT`);
+    console.log(`  Player Tasks:     ${ethers.formatEther(playerTasks.totalAllocated)} MWG`);
+    console.log(`  Social Followers: ${ethers.formatEther(socialFollowers.totalAllocated)} MWG`);
+    console.log(`  Social Posters:   ${ethers.formatEther(socialPosters.totalAllocated)} MWG`);
+    console.log(`  Ecosystem Fund:   ${ethers.formatEther(ecosystemFund.totalAllocated)} MWG`);
 
     // Validate total allocation
     const totalVaultAllocation = playerTasks.totalAllocated +
@@ -337,8 +360,8 @@ async function main() {
 
     if (totalVaultAllocation !== GAME_ALLOCATION) {
         console.error(`\n❌ Vault allocation mismatch!`);
-        console.error(`  Expected: ${ethers.formatEther(GAME_ALLOCATION)} MWT`);
-        console.error(`  Got:      ${ethers.formatEther(totalVaultAllocation)} MWT`);
+        console.error(`  Expected: ${ethers.formatEther(GAME_ALLOCATION)} MWG`);
+        console.error(`  Got:      ${ethers.formatEther(totalVaultAllocation)} MWG`);
         throw new Error("Vault allocation validation failed!");
     }
 
@@ -401,6 +424,7 @@ async function main() {
             token: {
                 gameOperatorRole: gameAddress,
                 pauseRole: adminWalletAddress,
+                blacklistManagerRole: adminWalletAddress,
                 defaultAdmin: adminWalletAddress,
                 previousAdmin: deployer.address
             },
@@ -433,13 +457,18 @@ async function main() {
                 grantGameDefaultAdminTx.hash,
                 grantVaultDefaultAdminTx.hash,
                 grantVaultAdminRoleTx.hash,
-                grantTokenDefaultAdminTx.hash
+                grantTokenDefaultAdminTx.hash,
+                grantBlacklistManagerTx.hash
             ],
             roleRevocations: [
                 revokeGameAdminTx.hash,
+                revokeGameAdminRoleTx.hash,
+                revokeRewardDistributorTx.hash,
                 revokeVaultDefaultAdminTx.hash,
                 revokeVaultAdminRoleTx.hash,
-                revokeTokenAdminTx.hash
+                revokeTokenAdminTx.hash,
+                revokeTokenPauseTx.hash,
+                revokeBlacklistManagerTx.hash
             ],
             adminTransfer: {
                 newAdmin: adminWalletAddress,
@@ -517,9 +546,9 @@ async function main() {
     console.log(`  Partner Vault: ${partnerVaultAddress}\n`);
 
     console.log("📊 Token Distribution:");
-    console.log(`  Total Supply:  ${ethers.formatEther(INITIAL_SUPPLY)} MWT`);
-    console.log(`  Game Contract: ${ethers.formatEther(finalGameBalance)} MWT (90%)`);
-    console.log(`  Partner Vault: ${ethers.formatEther(finalPartnerVaultBalance)} MWT (10%)\n`);
+    console.log(`  Total Supply:  ${ethers.formatEther(INITIAL_SUPPLY)} MWG`);
+    console.log(`  Game Contract: ${ethers.formatEther(finalGameBalance)} MWG (90%)`);
+    console.log(`  Partner Vault: ${ethers.formatEther(finalPartnerVaultBalance)} MWG (10%)\n`);
 
     console.log("🔐 Important Notes:");
     console.log("  1. Save the contract addresses above");

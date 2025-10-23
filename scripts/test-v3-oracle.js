@@ -11,15 +11,15 @@ async function main() {
 
     console.log('\n📍 Configuration:');
     console.log(`   V3 Pool: ${process.env.MWT_BNB_PAIR_ADDRESS}`);
-    console.log(`   MWT Token: ${process.env.MWT_TOKEN_ADDRESS}`);
+    console.log(`   MWG Token: ${process.env.MWT_TOKEN_ADDRESS}`);
     console.log(`   Target Peg: $${process.env.TARGET_PEG_USD}`);
 
     const oracle = new PriceOracleV3();
 
     try {
-        console.log('\n\n1️⃣  Fetching MWT/BNB price from V3 pool...\n');
+        console.log('\n\n1️⃣  Fetching MWG/BNB price from V3 pool...\n');
         const mwtBnbPrice = await oracle.getMWTBNBPrice();
-        console.log(`   ✅ MWT/BNB: ${mwtBnbPrice.toFixed(10)} BNB per MWT`);
+        console.log(`   ✅ MWG/BNB: ${mwtBnbPrice.toFixed(10)} BNB per MWG`);
 
         console.log('\n2️⃣  Fetching BNB/USD from Chainlink...\n');
         const bnbUsdPrice = await oracle.getBNBUSDPrice();
@@ -34,8 +34,8 @@ async function main() {
         const mwtBtcPrice = mwtUsdPrice / btcUsdPrice;
         const satoshis = Math.round(mwtBtcPrice * 100000000);
 
-        console.log(`   ✅ MWT/USD: $${mwtUsdPrice.toFixed(8)}`);
-        console.log(`   ✅ MWT/BTC: ${mwtBtcPrice.toFixed(10)} BTC`);
+        console.log(`   ✅ MWG/USD: $${mwtUsdPrice.toFixed(8)}`);
+        console.log(`   ✅ MWG/BTC: ${mwtBtcPrice.toFixed(10)} BTC`);
         console.log(`   ✅ Satoshis: ${satoshis.toLocaleString()} sats`);
 
         console.log('\n5️⃣  Checking pool liquidity...\n');
@@ -46,11 +46,11 @@ async function main() {
         const allPrices = await oracle.getAllPrices();
 
         console.log('   📊 Complete Price Data:');
-        console.log(`      MWT/BNB: ${allPrices.mwtBnb.toFixed(10)}`);
+        console.log(`      MWG/BNB: ${allPrices.mwtBnb.toFixed(10)}`);
         console.log(`      BNB/USD: $${allPrices.bnbUsd.toFixed(2)}`);
         console.log(`      BTC/USD: $${allPrices.btcUsd.toFixed(2)}`);
-        console.log(`      MWT/USD: $${allPrices.mwtUsd.toFixed(8)}`);
-        console.log(`      MWT/BTC: ${allPrices.mwtBtc.toFixed(10)}`);
+        console.log(`      MWG/USD: $${allPrices.mwtUsd.toFixed(8)}`);
+        console.log(`      MWG/BTC: ${allPrices.mwtBtc.toFixed(10)}`);
         console.log(`      Satoshis: ${allPrices.satoshis.toLocaleString()}`);
         console.log(`      Liquidity: ${allPrices.liquidity}`);
         console.log(`      Pool Type: ${allPrices.poolType}`);
@@ -81,7 +81,7 @@ async function main() {
             console.log(`   ❌ Deviation is ${deviationPercent.toFixed(2)}% - Needs adjustment`);
         }
 
-        console.log(`\n   Your MWT is currently priced at $${deviation.currentPrice.toFixed(8)}`);
+        console.log(`\n   Your MWG is currently priced at $${deviation.currentPrice.toFixed(8)}`);
         console.log(`   Target is $${targetPeg.toFixed(8)}`);
 
     } catch (error) {

@@ -4,11 +4,12 @@ pragma solidity ^0.8.24;
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
-import "./interfaces/IMagicWorldToken.sol";
+import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "./interfaces/IMagicWorldGems.sol";
 
 /**
  * @title MagicWorldGame
- * @dev Game contract that manages Magic World Token distribution for play-to-earn mechanics
+ * @dev Game contract that manages Magic World Gems distribution for play-to-earn mechanics
  *
  * Features:
  * - Owns and manages the entire token supply
@@ -18,8 +19,8 @@ import "./interfaces/IMagicWorldToken.sol";
  * - Integration point for off-chain game servers
  */
 contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
-    // The Magic World Token contract
-    IMagicWorldToken public immutable magicWorldToken;
+    // The Magic World Gems contract
+    IMagicWorldGems public immutable magicWorldGems;
 
     // Role definitions
     bytes32 public constant GAME_ADMIN_ROLE = keccak256("GAME_ADMIN_ROLE");
@@ -29,14 +30,13 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     // Constants for time calculations
     uint256 private constant SECONDS_PER_HOUR = 3600;
     uint256 private constant SECONDS_PER_DAY = 86400;
-    uint256 private constant DAYS_PER_YEAR = 365;
 
     // Constants for percentage calculations
     uint256 private constant PERCENTAGE_BASE = 100;
     uint256 private constant PLAYER_TASKS_PERCENT = 50;
     uint256 private constant SOCIAL_FOLLOWERS_PERCENT = 5;
     uint256 private constant SOCIAL_POSTERS_PERCENT = 15;
-    uint256 private constant ECOSYSTEM_FUND_PERCENT = 30;
+    //uint256 private constant ECOSYSTEM_FUND_PERCENT = 30;
 
     // Constants for limits
     uint256 private constant MAX_BATCH_SIZE_LIMIT = 500;
@@ -68,14 +68,9 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     }
 
     mapping(AllocationType => AllocationVault) public vaults;
-
-    // Vault initialization tracking
-    bool public vaultsInitialized;
-
-    // Rate limiting and anti-abuse
-    uint256 public dailyRewardLimit = 1000 * 10 ** 18; // 1000 tokens per day per player
-    uint256 public maxBatchSize = 200;
-    uint256 public cooldownPeriod = SECONDS_PER_HOUR; // 1 hour minimum time between major rewards
+    // Distribution tracking
+    mapping(uint256 => MerkleDistribution) public distributions;
+    mapping(uint256 => mapping(address => uint256)) public claimed;
 
     // Player tracking
     mapping(address => uint256) public dailyRewardsReceived;
@@ -87,6 +82,15 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     uint256 public totalRewardsDistributed;
     uint256 public totalPlayersRewarded;
     uint256 public currentDay;
+    uint256 public nextDistributionId;
+
+    // Rate limiting and anti-abuse
+    uint256 public dailyRewardLimit = 1000 * 10 ** 18; // 1000 tokens per day per player
+    uint256 public maxBatchSize = 200;
+    uint256 public cooldownPeriod = SECONDS_PER_HOUR; // 1 hour minimum time between major rewards
+
+    // Vault initialization tracking (bool packed last to potentially share slot)
+    bool public vaultsInitialized;
 
     // Events
     event RewardsDistributed(
@@ -121,7 +125,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
 
     /**
      * @dev Constructor sets up the game contract with token reference
-     * @param _tokenAddress Address of the Magic World Token contract
+     * @param _tokenAddress Address of the Magic World Gems contract
      *
      * Requirements:
      * - Token address must not be zero
@@ -133,7 +137,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     constructor(address _tokenAddress) {
         require(_tokenAddress != address(0), "MWG: Invalid token address");
 
-        magicWorldToken = IMagicWorldToken(_tokenAddress);
+        magicWorldGems = IMagicWorldGems(_tokenAddress);
 
         // Grant roles to deployer
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
@@ -278,7 +282,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         vaults[vaultType].remaining -= totalAmount;
 
         // Use batch transfer for efficiency
-        magicWorldToken.batchTransfer(recipients, amounts);
+        magicWorldGems.batchTransfer(recipients, amounts);
 
         emit VaultDistributed(
             _msgSender(),
@@ -341,7 +345,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         vaults[vaultType].remaining -= totalAmount;
 
         // Use batch transfer equal for gas efficiency
-        magicWorldToken.batchTransferEqual(recipients, amount);
+        magicWorldGems.batchTransferEqual(recipients, amount);
 
         emit VaultDistributed(
             _msgSender(),
@@ -363,12 +367,12 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     ) external whenNotPaused nonReentrant {
         require(amount > 0, "MWG: Zero amount");
         require(
-            magicWorldToken.balanceOf(_msgSender()) >= amount,
+            magicWorldGems.balanceOf(_msgSender()) >= amount,
             "MWG: Insufficient balance"
         );
 
         // Transfer tokens to this contract (effectively burning them)
-        magicWorldToken.transferFrom(_msgSender(), address(this), amount);
+        magicWorldGems.transferFrom(_msgSender(), address(this), amount);
 
         emit TokensBurned(_msgSender(), amount, itemId);
     }
@@ -446,11 +450,11 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
     ) external onlyRole(DEFAULT_ADMIN_ROLE) {
         require(amount > 0, "MWG: Zero amount");
         require(
-            magicWorldToken.balanceOf(address(this)) >= amount,
+            magicWorldGems.balanceOf(address(this)) >= amount,
             "MWG: Insufficient balance"
         );
 
-        magicWorldToken.transfer(_msgSender(), amount);
+        magicWorldGems.transfer(_msgSender(), amount);
         emit EmergencyWithdraw(_msgSender(), amount);
     }
 
@@ -507,7 +511,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         return (
             totalRewardsDistributed,
             totalPlayersRewarded,
-            magicWorldToken.balanceOf(address(this))
+            magicWorldGems.balanceOf(address(this))
         );
     }
 
@@ -696,5 +700,348 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         _revokeRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
         emit AdminTransferred(_msgSender(), newAdmin);
+    }
+
+    // ============================================
+    // MERKLE DISTRIBUTION SYSTEM
+    // ============================================
+
+    /**
+     * @dev Structure for Merkle-based token distributions
+     * Allows users to claim tokens themselves using Merkle proofs
+     *
+     * Storage layout optimized for gas efficiency:
+     * Slot 0: merkleRoot (32 bytes)
+     * Slot 1: totalAllocated (32 bytes)
+     * Slot 2: totalClaimed (32 bytes)
+     * Slot 3: startTime (32 bytes)
+     * Slot 4: endTime (32 bytes)
+     * Slot 5: vaultType (1 byte) + finalized (1 byte) + 30 bytes free
+     */
+    struct MerkleDistribution {
+        bytes32 merkleRoot; // Root of the Merkle tree
+        uint256 totalAllocated; // Total tokens allocated for this distribution
+        uint256 totalClaimed; // Total tokens claimed so far
+        uint256 startTime; // When distribution becomes active
+        uint256 endTime; // Expiration time (unclaimed returns to vault)
+        AllocationType vaultType; // Which vault funded this distribution (uint8 enum)
+        bool finalized; // Whether unclaimed tokens returned to vault
+    }
+
+    // Events for Merkle distributions
+    event MerkleDistributionCreated(
+        uint256 indexed distributionId,
+        bytes32 merkleRoot,
+        uint256 totalAllocated,
+        AllocationType indexed vaultType,
+        uint256 startTime,
+        uint256 endTime
+    );
+
+    event TokensClaimed(
+        uint256 indexed distributionId,
+        address indexed user,
+        uint256 amount,
+        uint256 totalClaimed
+    );
+
+    event DistributionFinalized(
+        uint256 indexed distributionId,
+        uint256 unclaimedAmount,
+        AllocationType indexed vaultType
+    );
+
+    /**
+     * @dev Create a new Merkle-based distribution
+     * @param merkleRoot Root hash of the Merkle tree
+     * @param totalAllocated Total amount of tokens allocated for this distribution
+     * @param vaultType Which vault to deduct tokens from
+     * @param durationInDays How many days until distribution expires
+     * @return distributionId The ID of the created distribution
+     *
+     * Requirements:
+     * - Caller must have GAME_ADMIN_ROLE or DEFAULT_ADMIN_ROLE
+     * - Vaults must be initialized
+     * - Vault must have sufficient balance
+     * - Duration must be at least 1 day
+     *
+     * Note: Tokens are immediately deducted from vault
+     * Unclaimed tokens can be returned to vault after expiration via finalizeDistribution()
+     */
+    function setMerkleDistribution(
+        bytes32 merkleRoot,
+        uint256 totalAllocated,
+        AllocationType vaultType,
+        uint256 durationInDays
+    ) external vaultsInitializedRequired returns (uint256 distributionId) {
+        // Allow both GAME_ADMIN_ROLE and DEFAULT_ADMIN_ROLE
+        require(
+            hasRole(GAME_ADMIN_ROLE, _msgSender()) ||
+                hasRole(DEFAULT_ADMIN_ROLE, _msgSender()),
+            "MWG: Caller is not admin"
+        );
+
+        require(merkleRoot != bytes32(0), "MWG: Invalid merkle root");
+        require(totalAllocated > 0, "MWG: Zero allocation");
+        require(durationInDays >= 1, "MWG: Duration too short");
+
+        // Check vault has sufficient balance
+        require(
+            vaults[vaultType].remaining >= totalAllocated,
+            "MWG: Insufficient vault balance"
+        );
+
+        // Deduct from vault
+        vaults[vaultType].spent += totalAllocated;
+        vaults[vaultType].remaining -= totalAllocated;
+
+        // Create distribution
+        distributionId = nextDistributionId++;
+
+        uint256 startTime = block.timestamp;
+        uint256 endTime = startTime + (durationInDays * SECONDS_PER_DAY);
+
+        distributions[distributionId] = MerkleDistribution({
+            merkleRoot: merkleRoot,
+            totalAllocated: totalAllocated,
+            totalClaimed: 0,
+            startTime: startTime,
+            endTime: endTime,
+            vaultType: vaultType,
+            finalized: false
+        });
+
+        emit MerkleDistributionCreated(
+            distributionId,
+            merkleRoot,
+            totalAllocated,
+            vaultType,
+            startTime,
+            endTime
+        );
+    }
+
+    /**
+     * @dev Claim tokens from a Merkle distribution
+     * @param distributionId ID of the distribution to claim from
+     * @param totalAmount User's total allocation in this distribution (from Merkle tree)
+     * @param proof Merkle proof for verification
+     *
+     * Requirements:
+     * - Distribution must exist and not be finalized
+     * - Distribution must not be expired
+     * - Merkle proof must be valid
+     * - User must have unclaimed tokens
+     *
+     * Note:
+     * - Bypasses daily limits (pre-approved allocation)
+     * - Users can claim partially multiple times
+     * - Leaf format: keccak256(abi.encodePacked(userAddress, totalAmount))
+     */
+    function claimFromMerkle(
+        uint256 distributionId,
+        uint256 totalAmount,
+        bytes32[] calldata proof
+    ) external nonReentrant whenNotPaused {
+        MerkleDistribution storage distribution = distributions[distributionId];
+
+        require(
+            distribution.merkleRoot != bytes32(0),
+            "MWG: Distribution does not exist"
+        );
+        require(!distribution.finalized, "MWG: Distribution finalized");
+        require(
+            block.timestamp < distribution.endTime,
+            "MWG: Distribution expired"
+        );
+        require(
+            block.timestamp >= distribution.startTime,
+            "MWG: Distribution not started"
+        );
+
+        // Verify Merkle proof
+        bytes32 leaf = keccak256(abi.encodePacked(_msgSender(), totalAmount));
+        require(
+            MerkleProof.verify(proof, distribution.merkleRoot, leaf),
+            "MWG: Invalid proof"
+        );
+
+        // Calculate claimable amount
+        uint256 alreadyClaimed = claimed[distributionId][_msgSender()];
+        require(totalAmount > alreadyClaimed, "MWG: Nothing to claim");
+
+        uint256 claimableAmount = totalAmount - alreadyClaimed;
+
+        // Update claimed tracking
+        claimed[distributionId][_msgSender()] = totalAmount;
+        distribution.totalClaimed += claimableAmount;
+
+        // Transfer tokens
+        require(
+            magicWorldGems.transfer(_msgSender(), claimableAmount),
+            "MWG: Token transfer failed"
+        );
+
+        emit TokensClaimed(
+            distributionId,
+            _msgSender(),
+            claimableAmount,
+            totalAmount
+        );
+    }
+
+    /**
+     * @dev Finalize an expired distribution and return unclaimed tokens to vault
+     * @param distributionId ID of the distribution to finalize
+     *
+     * Requirements:
+     * - Distribution must exist
+     * - Distribution must be expired
+     * - Distribution must not already be finalized
+     *
+     * Note: Can be called by anyone after expiration
+     * Unclaimed tokens are returned to the original vault
+     */
+    function finalizeDistribution(uint256 distributionId) external {
+        MerkleDistribution storage distribution = distributions[distributionId];
+
+        require(
+            distribution.merkleRoot != bytes32(0),
+            "MWG: Distribution does not exist"
+        );
+        require(!distribution.finalized, "MWG: Already finalized");
+        require(
+            block.timestamp >= distribution.endTime,
+            "MWG: Not expired yet"
+        );
+
+        distribution.finalized = true;
+
+        // Calculate unclaimed amount
+        uint256 unclaimedAmount = distribution.totalAllocated -
+            distribution.totalClaimed;
+
+        // Return unclaimed tokens to vault
+        if (unclaimedAmount > 0) {
+            vaults[distribution.vaultType].remaining += unclaimedAmount;
+            vaults[distribution.vaultType].spent -= unclaimedAmount;
+        }
+
+        emit DistributionFinalized(
+            distributionId,
+            unclaimedAmount,
+            distribution.vaultType
+        );
+    }
+
+    /**
+     * @dev Get detailed information about a distribution
+     * @param distributionId ID of the distribution
+     * @return merkleRoot Root of the Merkle tree
+     * @return totalAllocated Total tokens allocated
+     * @return totalClaimed Total tokens claimed
+     * @return startTime Distribution start time
+     * @return endTime Distribution end time
+     * @return vaultType Which vault funded this
+     * @return finalized Whether distribution is finalized
+     * @return isActive Whether distribution is currently active
+     * @return unclaimedAmount Remaining unclaimed tokens
+     */
+    function getDistributionInfo(
+        uint256 distributionId
+    )
+        external
+        view
+        returns (
+            bytes32 merkleRoot,
+            uint256 totalAllocated,
+            uint256 totalClaimed,
+            uint256 startTime,
+            uint256 endTime,
+            AllocationType vaultType,
+            bool finalized,
+            bool isActive,
+            uint256 unclaimedAmount
+        )
+    {
+        MerkleDistribution memory distribution = distributions[distributionId];
+
+        bool active = !distribution.finalized &&
+            block.timestamp >= distribution.startTime &&
+            block.timestamp < distribution.endTime;
+
+        uint256 unclaimed = distribution.totalAllocated -
+            distribution.totalClaimed;
+
+        return (
+            distribution.merkleRoot,
+            distribution.totalAllocated,
+            distribution.totalClaimed,
+            distribution.startTime,
+            distribution.endTime,
+            distribution.vaultType,
+            distribution.finalized,
+            active,
+            unclaimed
+        );
+    }
+
+    /**
+     * @dev Get amount claimed by a user from a specific distribution
+     * @param distributionId ID of the distribution
+     * @param user Address of the user
+     * @return Amount claimed by the user
+     */
+    function getClaimedAmount(
+        uint256 distributionId,
+        address user
+    ) external view returns (uint256) {
+        return claimed[distributionId][user];
+    }
+
+    /**
+     * @dev Calculate claimable amount for a user (view function)
+     * @param distributionId ID of the distribution
+     * @param user Address of the user
+     * @param totalAmount User's total allocation (from Merkle tree)
+     * @param proof Merkle proof for verification
+     * @return claimable Amount user can currently claim
+     * @return isValid Whether the proof is valid
+     */
+    function getClaimableAmount(
+        uint256 distributionId,
+        address user,
+        uint256 totalAmount,
+        bytes32[] calldata proof
+    ) external view returns (uint256 claimable, bool isValid) {
+        MerkleDistribution memory distribution = distributions[distributionId];
+
+        // Check if distribution is active
+        if (
+            distribution.merkleRoot == bytes32(0) ||
+            distribution.finalized ||
+            block.timestamp >= distribution.endTime ||
+            block.timestamp < distribution.startTime
+        ) {
+            return (0, false);
+        }
+
+        // Verify proof
+        bytes32 leaf = keccak256(abi.encodePacked(user, totalAmount));
+        isValid = MerkleProof.verify(proof, distribution.merkleRoot, leaf);
+
+        if (!isValid) {
+            return (0, false);
+        }
+
+        // Calculate claimable
+        uint256 alreadyClaimed = claimed[distributionId][user];
+        if (totalAmount > alreadyClaimed) {
+            claimable = totalAmount - alreadyClaimed;
+        } else {
+            claimable = 0;
+        }
+
+        return (claimable, true);
     }
 }

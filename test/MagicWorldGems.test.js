@@ -1,8 +1,8 @@
 const { expect } = require("chai");
 const { ethers } = require("hardhat");
 
-describe("MagicWorldToken", function () {
-    let MagicWorldToken;
+describe("MagicWorldGems", function () {
+    let MagicWorldGems;
     let token;
     let owner;
     let gameOperator;
@@ -11,15 +11,15 @@ describe("MagicWorldToken", function () {
     let user3;
     let users;
 
-    const TOKEN_NAME = "Magic World Token";
-    const TOKEN_SYMBOL = "MWT";
+    const TOKEN_NAME = "Magic World Gems";
+    const TOKEN_SYMBOL = "MWG";
     const TOTAL_SUPPLY = ethers.parseEther("1000000000"); // 1 billion tokens
 
     beforeEach(async function () {
         [owner, gameOperator, user1, user2, user3, ...users] = await ethers.getSigners();
 
-        MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
+        MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        token = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
         await token.waitForDeployment();
 
         // Grant GAME_OPERATOR_ROLE to gameOperator
@@ -89,13 +89,13 @@ describe("MagicWorldToken", function () {
             it("Should not allow transfer to zero address", async function () {
                 await expect(
                     token.transferAdmin(ethers.ZeroAddress)
-                ).to.be.revertedWith("MWT: New admin is zero address");
+                ).to.be.revertedWith("MWG: New admin is zero address");
             });
 
             it("Should not allow transfer to current admin", async function () {
                 await expect(
                     token.transferAdmin(owner.address)
-                ).to.be.revertedWith("MWT: New admin is current admin");
+                ).to.be.revertedWith("MWG: New admin is current admin");
             });
 
             it("Should allow new admin to grant roles", async function () {
@@ -145,7 +145,7 @@ describe("MagicWorldToken", function () {
 
                 await expect(
                     token.connect(gameOperator).batchTransfer(recipients, amounts)
-                ).to.be.revertedWith("MWT: Array length mismatch");
+                ).to.be.revertedWith("MWG: Array length mismatch");
             });
 
             it("Should revert if called by non-operator", async function () {
@@ -163,7 +163,7 @@ describe("MagicWorldToken", function () {
 
                 await expect(
                     token.connect(gameOperator).batchTransfer(recipients, amounts)
-                ).to.be.revertedWith("MWT: Batch size too large");
+                ).to.be.revertedWith("MWG: Batch size too large");
             });
         });
 
@@ -188,7 +188,7 @@ describe("MagicWorldToken", function () {
 
                 await expect(
                     token.connect(gameOperator).batchTransferEqual(recipients, amount)
-                ).to.be.revertedWith("MWT: Insufficient balance");
+                ).to.be.revertedWith("MWG: Insufficient balance");
             });
         });
     });
@@ -266,7 +266,7 @@ describe("MagicWorldToken", function () {
 
             await expect(
                 token.connect(gameOperator).batchTransfer(recipients, amounts)
-            ).to.be.revertedWith("MWT: Zero amount transfer");
+            ).to.be.revertedWith("MWG: Zero amount transfer");
         });
     });
 });

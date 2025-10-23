@@ -39,7 +39,7 @@ async function main() {
     console.log(`Deployer: ${deployer.address}\n`);
 
     // Get contract instances
-    const token = await ethers.getContractAt("MagicWorldToken", deployment.contracts.token.address);
+    const token = await ethers.getContractAt("MagicWorldGems", deployment.contracts.token.address);
     const game = await ethers.getContractAt("MagicWorldGame", deployment.contracts.game.address);
     const partnerVault = await ethers.getContractAt("PartnerVault", deployment.contracts.partnerVault.address);
 
@@ -66,7 +66,7 @@ async function main() {
     const newDailyLimit = ethers.parseEther("2000"); // 2000 tokens per day
     const updateLimitTx = await game.setDailyRewardLimit(newDailyLimit);
     await updateLimitTx.wait();
-    console.log(`   ✅ Daily limit updated to ${ethers.formatEther(newDailyLimit)} MWT\n`);
+    console.log(`   ✅ Daily limit updated to ${ethers.formatEther(newDailyLimit)} MWG\n`);
     */
 
     /*
@@ -122,7 +122,7 @@ async function main() {
     const partnerAllocation = ethers.parseEther("1000000"); // 1M tokens
     const allocateTx = await partnerVault.allocateToPartner(partnerAddress, partnerAllocation);
     await allocateTx.wait();
-    console.log(`   ✅ Allocated ${ethers.formatEther(partnerAllocation)} MWT to ${partnerAddress}`);
+    console.log(`   ✅ Allocated ${ethers.formatEther(partnerAllocation)} MWG to ${partnerAddress}`);
     console.log(`   ⏰ Withdrawable after 3 years from now\n`);
     */
 
@@ -193,7 +193,7 @@ async function main() {
         const totalSupply = await token.totalSupply();
         const tokenPaused = await token.paused();
         console.log("🪙 Token Contract:");
-        console.log(`  Total Supply:  ${ethers.formatEther(totalSupply)} MWT`);
+        console.log(`  Total Supply:  ${ethers.formatEther(totalSupply)} MWG`);
         console.log(`  Status:        ${tokenPaused ? '⏸️  PAUSED' : '✅ Active'}\n`);
 
         // Game status
@@ -205,7 +205,7 @@ async function main() {
 
         console.log("🎮 Game Contract:");
         console.log(`  Status:        ${gamePaused ? '⏸️  PAUSED' : '✅ Active'}`);
-        console.log(`  Daily Limit:   ${ethers.formatEther(dailyLimit)} MWT`);
+        console.log(`  Daily Limit:   ${ethers.formatEther(dailyLimit)} MWG`);
         console.log(`  Max Batch:     ${maxBatch}`);
         console.log(`  Cooldown:      ${cooldown} seconds`);
         console.log(`  Vaults Init:   ${vaultsInit ? '✅' : '❌'}\n`);
@@ -213,33 +213,33 @@ async function main() {
         // Vault balances
         const [totalDist, playersCount, gameBalance] = await game.getContractStats();
         console.log("📊 Distribution Stats:");
-        console.log(`  Total Distributed: ${ethers.formatEther(totalDist)} MWT`);
+        console.log(`  Total Distributed: ${ethers.formatEther(totalDist)} MWG`);
         console.log(`  Players Rewarded:  ${playersCount.toString()}`);
-        console.log(`  Game Balance:      ${ethers.formatEther(gameBalance)} MWT\n`);
+        console.log(`  Game Balance:      ${ethers.formatEther(gameBalance)} MWG\n`);
 
         // Vault allocations
         const [playerTasks, socialFollowers, socialPosters, ecosystemFund] = await game.getAllVaultStats();
         console.log("💰 Vault Status:");
         console.log(`  Player Tasks:`);
-        console.log(`    Allocated: ${ethers.formatEther(playerTasks.totalAllocated)} MWT`);
-        console.log(`    Remaining: ${ethers.formatEther(playerTasks.remaining)} MWT`);
+        console.log(`    Allocated: ${ethers.formatEther(playerTasks.totalAllocated)} MWG`);
+        console.log(`    Remaining: ${ethers.formatEther(playerTasks.remaining)} MWG`);
         console.log(`  Social Followers:`);
-        console.log(`    Allocated: ${ethers.formatEther(socialFollowers.totalAllocated)} MWT`);
-        console.log(`    Remaining: ${ethers.formatEther(socialFollowers.remaining)} MWT`);
+        console.log(`    Allocated: ${ethers.formatEther(socialFollowers.totalAllocated)} MWG`);
+        console.log(`    Remaining: ${ethers.formatEther(socialFollowers.remaining)} MWG`);
         console.log(`  Social Posters:`);
-        console.log(`    Allocated: ${ethers.formatEther(socialPosters.totalAllocated)} MWT`);
-        console.log(`    Remaining: ${ethers.formatEther(socialPosters.remaining)} MWT`);
+        console.log(`    Allocated: ${ethers.formatEther(socialPosters.totalAllocated)} MWG`);
+        console.log(`    Remaining: ${ethers.formatEther(socialPosters.remaining)} MWG`);
         console.log(`  Ecosystem Fund:`);
-        console.log(`    Allocated: ${ethers.formatEther(ecosystemFund.totalAllocated)} MWT`);
-        console.log(`    Remaining: ${ethers.formatEther(ecosystemFund.remaining)} MWT\n`);
+        console.log(`    Allocated: ${ethers.formatEther(ecosystemFund.totalAllocated)} MWG`);
+        console.log(`    Remaining: ${ethers.formatEther(ecosystemFund.remaining)} MWG\n`);
 
         // Partner Vault
         const partnerVaultBalance = await token.balanceOf(deployment.contracts.partnerVault.address);
         const totalAllocated = await partnerVault.totalAllocated();
         console.log("🤝 Partner Vault:");
-        console.log(`  Balance:       ${ethers.formatEther(partnerVaultBalance)} MWT`);
-        console.log(`  Allocated:     ${ethers.formatEther(totalAllocated)} MWT`);
-        console.log(`  Unallocated:   ${ethers.formatEther(partnerVaultBalance - totalAllocated)} MWT\n`);
+        console.log(`  Balance:       ${ethers.formatEther(partnerVaultBalance)} MWG`);
+        console.log(`  Allocated:     ${ethers.formatEther(totalAllocated)} MWG`);
+        console.log(`  Unallocated:   ${ethers.formatEther(partnerVaultBalance - totalAllocated)} MWG\n`);
 
         // Role checks
         const REWARD_DISTRIBUTOR_ROLE = await game.REWARD_DISTRIBUTOR_ROLE();

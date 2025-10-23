@@ -9,7 +9,8 @@
         "test": "jest",
         "test:watch": "jest --watch",
         "test:integration": "node scripts/test-bot-integration.js",
-        "test:all": "npm run test:swagger && npm run test:integration",
+        "test:merkle": "node scripts/test-merkle-integration.js",
+        "test:all": "npm run test:swagger && npm run test:integration && npm run test:merkle",
         "lint": "eslint src/",
         "setup:mongo": "node setup-mongo.js"
     },
@@ -37,7 +38,9 @@
         "pg": "^8.11.2",
         "mongoose": "^8.0.0",
         "swagger-ui-express": "^5.0.0",
-        "swagger-jsdoc": "^6.2.8"
+        "swagger-jsdoc": "^6.2.8",
+        "merkletreejs": "^0.3.11",
+        "keccak256": "^1.0.6"
     },
     "devDependencies": {
         "nodemon": "^3.0.1",

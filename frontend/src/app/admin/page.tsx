@@ -253,6 +253,25 @@ function DashboardContent() {
         </h2>
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+          {/* Merkle Distributions */}
+          {(roleCheck.roles.rewardDistributor ||
+            roleCheck.roles.gameDefaultAdmin ||
+            roleCheck.roles.gameAdmin) && (
+            <Link href="/admin/merkle">
+              <div className="p-6 bg-gradient-to-br from-green-500/10 to-emerald-500/10 border-2 border-green-500/30 rounded-xl hover:border-green-500/50 transition-all cursor-pointer group">
+                <div className="text-3xl mb-3 group-hover:scale-110 transition-transform">
+                  🌳
+                </div>
+                <h3 className="text-lg font-semibold text-white mb-2">
+                  Merkle Distributions
+                </h3>
+                <p className="text-sm text-gray-400">
+                  Gas-efficient batch token distributions
+                </p>
+              </div>
+            </Link>
+          )}
+
           {/* Reward Distribution */}
           {(roleCheck.roles.rewardDistributor ||
             roleCheck.roles.gameDefaultAdmin) && (

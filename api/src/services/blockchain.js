@@ -20,7 +20,7 @@ class BlockchainService {
     async initialize() {
         try {
             // Debug: Check private key
-            const privateKey = process.env.PRIVATE_KEY;
+            const privateKey = process.env.GAME_ADMIN_PRIVATE_KEY;
             logger.info(`🔑 Private key length: ${privateKey ? privateKey.length : 'undefined'}`);
             logger.info(`🔑 Private key starts with: ${privateKey ? privateKey.substring(0, 4) + '...' : 'undefined'}`);
 

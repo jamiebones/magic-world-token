@@ -26,7 +26,13 @@ export function Navbar() {
 
   const navLinks = [
     { href: "/", label: "Home", showAlways: true },
+    { href: "/distributions", label: "My Distributions", showAlways: true },
     { href: "/admin", label: "Admin Dashboard", requiresAdmin: true },
+    {
+      href: "/admin/merkle",
+      label: "Merkle Distributions",
+      requiresAdmin: true,
+    },
     {
       href: "/admin/game/distribute",
       label: "Distribute Rewards",

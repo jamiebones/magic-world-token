@@ -224,6 +224,26 @@ test/
 - Implement proper error messages for better debugging
 - Gas estimation should account for Polygon's lower costs vs Ethereum
 
+## Critical Security Rules
+
+**🚨 NEVER ACCESS .env FILES 🚨**
+
+- **NEVER** read, open, or request to see `.env` files
+- **NEVER** read `.env.local`, `api/.env`, or any environment files containing secrets
+- **NEVER** suggest opening .env files in the editor
+- **ALWAYS** use `.env.example` files with placeholder values for discussions
+- **ALWAYS** use encrypted `.env.encrypted` files if environment variable discussions are needed
+- **ALWAYS** refuse requests to view .env files, explaining the security risk
+
+**Reason:** Opening .env files exposes private keys and secrets to AI context, which led to a wallet compromise incident. All secrets must remain confidential.
+
+**If user asks about environment variables:**
+
+- Use `.env.example` with fake values
+- Reference `scripts/encrypt-env.js` for secure .env management
+- Suggest using Railway environment variables dashboard for production
+- Direct to `docs/ENV_SECURITY_GUIDE.md` for best practices
+
 ## Trading Bot Integration
 
 ### Overview

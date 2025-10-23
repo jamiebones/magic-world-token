@@ -28,8 +28,8 @@ async function main() {
     console.log(`Gas Price (actual from deployment): 5 gwei\n`);
 
     // Token configuration
-    const TOKEN_NAME = process.env.TOKEN_NAME || "Magic World Token";
-    const TOKEN_SYMBOL = process.env.TOKEN_SYMBOL || "MWT";
+    const TOKEN_NAME = process.env.TOKEN_NAME || "Magic World Gems";
+    const TOKEN_SYMBOL = process.env.TOKEN_SYMBOL || "MWG";
     const INITIAL_SUPPLY = process.env.INITIAL_SUPPLY
         ? BigInt(process.env.INITIAL_SUPPLY)
         : ethers.parseEther("1000000000"); // 1 billion tokens
@@ -40,8 +40,8 @@ async function main() {
 
     let totalGas = 0n;
 
-    // 1. Estimate MagicWorldToken deployment
-    console.log("1. Estimating MagicWorldToken deployment...");
+    // 1. Estimate MagicWorldGems deployment
+    console.log("1. Estimating MagicWorldGems deployment...");
     // Using actual deployment data from BSC Mainnet
     const tokenGas = 1352818n; // Actual gas used: 1,352,818 (99.13% of 1,364,722 limit)
     console.log(`   Gas: ${tokenGas.toString()} (actual from deployment)`);

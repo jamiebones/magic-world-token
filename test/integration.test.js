@@ -2,7 +2,7 @@ const { expect } = require("chai");
 const { ethers, network } = require("hardhat");
 
 describe("Integration Tests", function () {
-    let MagicWorldToken;
+    let MagicWorldGems;
     let MagicWorldGame;
     let token;
     let game;
@@ -20,8 +20,8 @@ describe("Integration Tests", function () {
         [owner, gameAdmin, distributor, ...players] = signers;
 
         // Deploy contracts
-        MagicWorldToken = await ethers.getContractFactory("MagicWorldToken");
-        token = await MagicWorldToken.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
+        MagicWorldGems = await ethers.getContractFactory("MagicWorldGems");
+        token = await MagicWorldGems.deploy(TOKEN_NAME, TOKEN_SYMBOL, TOTAL_SUPPLY);
         await token.waitForDeployment();
 
         MagicWorldGame = await ethers.getContractFactory("MagicWorldGame");
@@ -51,7 +51,7 @@ describe("Integration Tests", function () {
             expect(await token.totalSupply()).to.equal(TOTAL_SUPPLY);
 
             // 2. Game contract deployed with token address ✓
-            expect(await game.magicWorldToken()).to.equal(await token.getAddress());
+            expect(await game.magicWorldGems()).to.equal(await token.getAddress());
 
             // 3. All tokens transferred to game contract ✓
             expect(await token.balanceOf(await game.getAddress())).to.equal(TOTAL_SUPPLY);

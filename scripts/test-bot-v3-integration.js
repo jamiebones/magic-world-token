@@ -19,9 +19,9 @@ async function testBotIntegration() {
         const prices = await oracle.getAllPrices();
 
         console.log('   📊 Price Data:');
-        console.log(`      MWT/BNB: ${prices.mwtBnb.toFixed(10)} BNB`);
-        console.log(`      MWT/USD: $${prices.mwtUsd.toFixed(8)}`);
-        console.log(`      MWT/BTC: ${prices.mwtBtc.toFixed(10)} BTC`);
+        console.log(`      MWG/BNB: ${prices.mwtBnb.toFixed(10)} BNB`);
+        console.log(`      MWG/USD: $${prices.mwtUsd.toFixed(8)}`);
+        console.log(`      MWG/BTC: ${prices.mwtBtc.toFixed(10)} BTC`);
         console.log(`      Satoshis: ${prices.satoshis} sats`);
         console.log();
         console.log('   📈 Market Data:');
@@ -60,7 +60,7 @@ async function testBotIntegration() {
 
         console.log('💡 SUMMARY:');
         console.log(`   - V3 pool operational at ${process.env.MWT_BNB_PAIR_ADDRESS}`);
-        console.log(`   - Current MWT price: $${prices.mwtUsd.toFixed(8)}`);
+        console.log(`   - Current MWG price: $${prices.mwtUsd.toFixed(8)}`);
         console.log(`   - Deviation from target: ${Math.abs(deviation.deviation).toFixed(2)}%`);
         console.log(`   - Bot can now use V3 oracle for price monitoring\n`);
 
