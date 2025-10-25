@@ -33,6 +33,7 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
     }
 
     mapping(address => PartnerAllocation) public partnerAllocations;
+    address[] private partnerAddresses;
 
     uint256 public constant LOCKUP_PERIOD = 3 * 365 days; // 3 years
     uint256 public totalAllocated;
@@ -89,6 +90,7 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
             withdrawn: false
         });
 
+        partnerAddresses.push(partner);
         totalAllocated += amount;
 
         emit PartnerAllocated(partner, amount, block.timestamp);
@@ -235,5 +237,87 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
      */
     function getVaultBalance() external view returns (uint256) {
         return token.balanceOf(address(this));
+    }
+
+    /**
+     * @dev Get list of all partner addresses
+     * @return address[] Array of all partner addresses that have allocations
+     */
+    function getAllPartners() external view returns (address[] memory) {
+        return partnerAddresses;
+    }
+
+    /**
+     * @dev Get total number of partners
+     * @return uint256 Total count of partners with allocations
+     */
+    function getPartnerCount() external view returns (uint256) {
+        return partnerAddresses.length;
+    }
+
+    /**
+     * @dev Get paginated list of partners with their allocation details
+     * @param offset Starting index for pagination
+     * @param limit Maximum number of partners to return
+     * @return partners Array of partner addresses
+     * @return amounts Array of allocation amounts
+     * @return allocatedAts Array of allocation timestamps
+     * @return withdrawns Array of withdrawal status
+     * @return withdrawableAts Array of withdrawal eligibility timestamps
+     */
+    function getPartnersWithDetails(
+        uint256 offset,
+        uint256 limit
+    )
+        external
+        view
+        returns (
+            address[] memory partners,
+            uint256[] memory amounts,
+            uint256[] memory allocatedAts,
+            bool[] memory withdrawns,
+            uint256[] memory withdrawableAts
+        )
+    {
+        uint256 total = partnerAddresses.length;
+
+        // Handle edge cases
+        if (offset >= total) {
+            return (
+                new address[](0),
+                new uint256[](0),
+                new uint256[](0),
+                new bool[](0),
+                new uint256[](0)
+            );
+        }
+
+        // Calculate actual number of items to return
+        uint256 end = offset + limit;
+        if (end > total) {
+            end = total;
+        }
+        uint256 resultLength = end - offset;
+
+        // Initialize arrays
+        partners = new address[](resultLength);
+        amounts = new uint256[](resultLength);
+        allocatedAts = new uint256[](resultLength);
+        withdrawns = new bool[](resultLength);
+        withdrawableAts = new uint256[](resultLength);
+
+        // Fill arrays with data
+        for (uint256 i = 0; i < resultLength; i++) {
+            address partner = partnerAddresses[offset + i];
+            PartnerAllocation memory allocation = partnerAllocations[partner];
+
+            partners[i] = partner;
+            amounts[i] = allocation.amount;
+            allocatedAts[i] = allocation.allocatedAt;
+            withdrawns[i] = allocation.withdrawn;
+            withdrawableAts[i] = allocation.allocatedAt + LOCKUP_PERIOD;
+        }
+
+        return (partners, amounts, allocatedAts, withdrawns, withdrawableAts);
     }
 }

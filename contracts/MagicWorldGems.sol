@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/extensions/ERC20Permit.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "./interfaces/IMagicWorldGems.sol";
@@ -15,8 +16,15 @@ import "./interfaces/IMagicWorldGems.sol";
  * - Batch transfer operations for gas optimization
  * - Role-based access control for game operations
  * - Pausable for emergency situations
+ * - EIP-2612 permit for gasless approvals
  */
-contract MagicWorldGems is ERC20, AccessControl, Pausable, IMagicWorldGems {
+contract MagicWorldGems is
+    ERC20,
+    ERC20Permit,
+    AccessControl,
+    Pausable,
+    IMagicWorldGems
+{
     // Role definitions
     bytes32 public constant GAME_OPERATOR_ROLE =
         keccak256("GAME_OPERATOR_ROLE");
@@ -75,7 +83,7 @@ contract MagicWorldGems is ERC20, AccessControl, Pausable, IMagicWorldGems {
         string memory name,
         string memory symbol,
         uint256 totalSupply
-    ) ERC20(name, symbol) {
+    ) ERC20(name, symbol) ERC20Permit(name) {
         // Grant the deployer the default admin role
         _grantRole(DEFAULT_ADMIN_ROLE, _msgSender());
 
@@ -350,7 +358,6 @@ contract MagicWorldGems is ERC20, AccessControl, Pausable, IMagicWorldGems {
         );
 
         uint256 totalAmount = 0;
-
 
         //come back to this: loop within a loop is a no no:
 

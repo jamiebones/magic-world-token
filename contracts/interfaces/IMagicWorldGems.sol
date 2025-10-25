@@ -77,3 +77,6 @@ interface IMagicWorldGems is IERC20 {
     // Admin management
     function transferAdmin(address newAdmin) external;
 }
+
+// Note: EIP-2612 Permit functions (permit, nonces, DOMAIN_SEPARATOR)
+// are inherited from ERC20Permit and don't need to be redeclared here
