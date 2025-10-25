@@ -27,6 +27,7 @@ const customBsc = {
   }
 };
 
+// Create config once and export as singleton to prevent re-initialization
 export const config = getDefaultConfig({
   appName: process.env.NEXT_PUBLIC_APP_NAME || 'Magic World',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',

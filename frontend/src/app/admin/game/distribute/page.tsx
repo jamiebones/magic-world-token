@@ -9,7 +9,7 @@ import {
 } from "@/hooks/useGameOperations";
 import { VAULT_NAMES } from "@/config/contracts";
 import toast from "react-hot-toast";
-import { CustomConnectButton } from "@/components/ConnectButton";
+
 
 export default function DistributePage() {
   return (
