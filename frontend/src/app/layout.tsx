@@ -2,7 +2,8 @@ import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
-import { Navbar } from "@/components/Navbar";
+import { SideNav } from "@/components/SideNav";
+import { TopNav } from "@/components/TopNav";
 
 const geistSans = Geist({
   variable: "--font-geist-sans",
@@ -15,7 +16,7 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Magic World Token - Dashboard",
+  title: "Magic World Gems - Dashboard",
   description: "Play-to-Earn Token Management Dashboard for Magic World Game",
 };
 
@@ -30,7 +31,8 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <Providers>
-          <Navbar />
+          <SideNav />
+          <TopNav />
           {children}
         </Providers>
       </body>

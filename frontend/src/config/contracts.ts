@@ -5,6 +5,15 @@ export const CONTRACT_ADDRESSES = {
   PARTNER_VAULT: process.env.NEXT_PUBLIC_PARTNER_VAULT_ADDRESS as `0x${string}`,
 } as const;
 
+// Debug logging
+if (typeof window !== 'undefined') {
+  console.log('📋 Contract Addresses Loaded:', {
+    TOKEN: CONTRACT_ADDRESSES.TOKEN,
+    GAME: CONTRACT_ADDRESSES.GAME,
+    PARTNER_VAULT: CONTRACT_ADDRESSES.PARTNER_VAULT,
+  });
+}
+
 // Chain configuration
 export const SUPPORTED_CHAINS = {
   BSC_MAINNET: 56,

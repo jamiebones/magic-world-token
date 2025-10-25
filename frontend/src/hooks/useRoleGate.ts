@@ -1,6 +1,9 @@
 import { useAccount, useReadContract } from 'wagmi';
-import { CONTRACT_ADDRESSES } from '@/config/contracts';
-import { MagicWorldTokenABI, MagicWorldGameABI, PartnerVaultABI } from '@/abis';
+import { CONTRACT_ADDRESSES, DEFAULT_CHAIN_ID } from '@/config/contracts';
+import MagicWorldTokenABI from '@/abis/MagicWorldToken.json';
+import MagicWorldGameABI from '@/abis/MagicWorldGame.json';
+import PartnerVaultABI from '@/abis/PartnerVault.json';
+import { keccak256, toBytes } from 'viem';
 
 type ContractType = 'token' | 'game' | 'vault';
 
@@ -10,9 +13,20 @@ interface UseRoleGateProps {
 }
 
 const CONTRACTS = {
-  token: { address: CONTRACT_ADDRESSES.TOKEN as `0x${string}`, abi: MagicWorldTokenABI },
-  game: { address: CONTRACT_ADDRESSES.GAME as `0x${string}`, abi: MagicWorldGameABI },
-  vault: { address: CONTRACT_ADDRESSES.PARTNER_VAULT as `0x${string}`, abi: PartnerVaultABI },
+  token: { address: CONTRACT_ADDRESSES.TOKEN as `0x${string}`, abi: MagicWorldTokenABI.abi },
+  game: { address: CONTRACT_ADDRESSES.GAME as `0x${string}`, abi: MagicWorldGameABI.abi },
+  vault: { address: CONTRACT_ADDRESSES.PARTNER_VAULT as `0x${string}`, abi: PartnerVaultABI.abi },
+};
+
+// Pre-computed role hashes to avoid contract calls
+const ROLE_HASHES: Record<string, `0x${string}`> = {
+  'DEFAULT_ADMIN_ROLE': '0x0000000000000000000000000000000000000000000000000000000000000000',
+  'GAME_ADMIN_ROLE': keccak256(toBytes('GAME_ADMIN_ROLE')),
+  'REWARD_DISTRIBUTOR_ROLE': keccak256(toBytes('REWARD_DISTRIBUTOR_ROLE')),
+  'PAUSE_ROLE': keccak256(toBytes('PAUSE_ROLE')),
+  'GAME_OPERATOR_ROLE': keccak256(toBytes('GAME_OPERATOR_ROLE')),
+  'BLACKLIST_MANAGER_ROLE': keccak256(toBytes('BLACKLIST_MANAGER_ROLE')),
+  'ADMIN_ROLE': keccak256(toBytes('ADMIN_ROLE')),
 };
 
 /**
@@ -25,25 +39,36 @@ export function useRoleGate({ contract, roleConstant }: UseRoleGateProps) {
   const { address, isConnected } = useAccount();
   const contractConfig = CONTRACTS[contract];
 
-  // Get the role hash from the contract
-  const { data: roleHash } = useReadContract({
-    address: contractConfig.address,
-    abi: contractConfig.abi,
-    functionName: roleConstant,
-    query: {
-      enabled: isConnected && !!address,
-    },
-  }) as { data: `0x${string}` | undefined };
+  // Use pre-computed role hash instead of fetching from contract
+  const roleHash = ROLE_HASHES[roleConstant];
+
+  console.log(`🔍 useRoleGate - ${contract} / ${roleConstant}:`, {
+    contractAddress: contractConfig.address,
+    userAddress: address,
+    isConnected,
+    roleHash,
+    hasContractAddress: !!contractConfig.address,
+    hasUserAddress: !!address,
+    hasRoleHash: !!roleHash,
+    abiLength: contractConfig.abi?.length,
+  });
 
   // Check if the address has that role
-  const { data: hasRole, isLoading, refetch } = useReadContract({
+  const { data: hasRole, isLoading, refetch, error } = useReadContract({
     address: contractConfig.address,
     abi: contractConfig.abi,
     functionName: 'hasRole',
-    args: roleHash && address ? [roleHash as `0x${string}`, address] : undefined,
+    args: roleHash && address ? [roleHash, address] : undefined,
+    chainId: DEFAULT_CHAIN_ID,
     query: {
-      enabled: isConnected && !!address && !!roleHash,
+      enabled: isConnected && !!address && !!roleHash && !!contractConfig.address,
     },
+  });
+
+  console.log(`✅ Role check result ${contract}/${roleConstant}:`, {
+    hasRole,
+    isLoading,
+    error: error?.message,
   });
 
   return {
@@ -91,6 +116,13 @@ export function useHasGameOperatorRole() {
 }
 
 /**
+ * Hook to check if user has blacklist manager role on token contract
+ */
+export function useHasBlacklistManagerRole() {
+  return useRoleGate({ contract: 'token', roleConstant: 'BLACKLIST_MANAGER_ROLE' });
+}
+
+/**
  * Hook to check if user has admin role on partner vault
  */
 export function useIsPartnerVaultAdmin() {
@@ -124,8 +156,28 @@ export function useMultiRoleGate() {
     tokenAdmin.hasRole ||
     gameAdmin.hasRole ||
     gameDefaultAdmin.hasRole ||
+    rewardDistributor.hasRole ||
     vaultAdmin.hasRole ||
     vaultDefaultAdmin.hasRole;
+
+  // Debug logging
+  if (isConnected && !isAnyLoading) {
+    console.log('🔐 Role Check Debug:', {
+      address,
+      isConnected,
+      isAnyLoading,
+      hasAnyAdminRole,
+      roles: {
+        tokenAdmin: tokenAdmin.hasRole,
+        gameAdmin: gameAdmin.hasRole,
+        gameDefaultAdmin: gameDefaultAdmin.hasRole,
+        rewardDistributor: rewardDistributor.hasRole,
+        pauseRole: pauseRole.hasRole,
+        vaultAdmin: vaultAdmin.hasRole,
+        vaultDefaultAdmin: vaultDefaultAdmin.hasRole,
+      }
+    });
+  }
 
   return {
     roles: {

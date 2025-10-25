@@ -5,6 +5,7 @@ import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/cryptography/MerkleProof.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "./interfaces/IMagicWorldGems.sol";
 
 /**
@@ -19,6 +20,8 @@ import "./interfaces/IMagicWorldGems.sol";
  * - Integration point for off-chain game servers
  */
 contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
+    using SafeERC20 for IMagicWorldGems;
+
     // The Magic World Gems contract
     IMagicWorldGems public immutable magicWorldGems;
 
@@ -372,7 +375,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         );
 
         // Transfer tokens to this contract (effectively burning them)
-        magicWorldGems.transferFrom(_msgSender(), address(this), amount);
+        magicWorldGems.safeTransferFrom(_msgSender(), address(this), amount);
 
         emit TokensBurned(_msgSender(), amount, itemId);
     }
@@ -454,7 +457,7 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
             "MWG: Insufficient balance"
         );
 
-        magicWorldGems.transfer(_msgSender(), amount);
+        magicWorldGems.safeTransfer(_msgSender(), amount);
         emit EmergencyWithdraw(_msgSender(), amount);
     }
 
@@ -876,11 +879,8 @@ contract MagicWorldGame is AccessControl, Pausable, ReentrancyGuard {
         claimed[distributionId][_msgSender()] = totalAmount;
         distribution.totalClaimed += claimableAmount;
 
-        // Transfer tokens
-        require(
-            magicWorldGems.transfer(_msgSender(), claimableAmount),
-            "MWG: Token transfer failed"
-        );
+        // Transfer tokens using SafeERC20
+        magicWorldGems.safeTransfer(_msgSender(), claimableAmount);
 
         emit TokensClaimed(
             distributionId,

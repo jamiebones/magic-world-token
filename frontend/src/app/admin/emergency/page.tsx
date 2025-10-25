@@ -13,26 +13,10 @@ import { useGameEmergency } from "@/hooks/useGameOperations";
 import { usePartnerVaultEmergency } from "@/hooks/usePartnerVaultOperations";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 import toast from "react-hot-toast";
-import { CustomConnectButton } from "@/components/ConnectButton";
 
 export default function EmergencyPage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      {/* Header */}
-      <header className="border-b border-purple-500/20 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-              Emergency Controls
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Pause/unpause contracts and emergency operations
-            </p>
-          </div>
-          <CustomConnectButton />
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <RequireAnyRole

@@ -7,6 +7,8 @@ const ApiKey = require('../models/ApiKey');
 const Wallet = require('../models/Wallet');
 const { generateEncryptedWallet, decryptPrivateKey } = require('../utils/walletUtils');
 const logger = require('../utils/logger');
+const distributionFinalizer = require('../services/distributionFinalizer');
+const cronJobsService = require('../services/cronJobs');
 
 const router = express.Router();
 
@@ -1032,6 +1034,205 @@ router.post('/wallets/batch/private-keys/csv',
         logger.warn(`⚠️⚠️⚠️ CSV with ${wallets.length} PRIVATE KEYS downloaded by admin from ${req.ip}`);
 
         res.send(csv);
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/finalization/status:
+ *   get:
+ *     summary: Get auto-finalization system status (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     responses:
+ *       200:
+ *         description: Finalization system status
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     enabled:
+ *                       type: boolean
+ *                     schedule:
+ *                       type: string
+ *                     nextRun:
+ *                       type: string
+ *                     isRunning:
+ *                       type: boolean
+ *                     stats:
+ *                       type: object
+ */
+router.get('/finalization/status',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const status = cronJobsService.getStatus();
+        const stats = await distributionFinalizer.getStats(7); // Last 7 days
+
+        res.json({
+            success: true,
+            data: {
+                ...status,
+                stats
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/finalization/run:
+ *   post:
+ *     summary: Manually trigger auto-finalization (Admin only)
+ *     description: Immediately runs the auto-finalization process to finalize expired distributions
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     responses:
+ *       200:
+ *         description: Finalization run completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     finalized:
+ *                       type: integer
+ *                     failed:
+ *                       type: integer
+ *                     skipped:
+ *                       type: integer
+ *                     transactions:
+ *                       type: array
+ */
+router.post('/finalization/run',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        logger.info(`Manual finalization triggered by admin from ${req.ip}`);
+
+        const result = await cronJobsService.triggerManualFinalization();
+
+        res.json({
+            success: result.success,
+            data: result
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/finalization/history:
+ *   get:
+ *     summary: Get finalization history (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 100
+ *         description: Number of results to return
+ *       - in: query
+ *         name: status
+ *         schema:
+ *           type: string
+ *           enum: [pending, success, failed, skipped]
+ *         description: Filter by status
+ *     responses:
+ *       200:
+ *         description: Finalization history retrieved
+ */
+router.get('/finalization/history',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { limit = 100, status } = req.query;
+
+        const history = await distributionFinalizer.getHistory(
+            parseInt(limit),
+            status
+        );
+
+        res.json({
+            success: true,
+            data: {
+                count: history.length,
+                history
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/finalization/stats:
+ *   get:
+ *     summary: Get finalization statistics (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *         description: Number of days to calculate stats for
+ *     responses:
+ *       200:
+ *         description: Finalization statistics
+ */
+router.get('/finalization/stats',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { days = 7 } = req.query;
+
+        const stats = await distributionFinalizer.getStats(parseInt(days));
+
+        res.json({
+            success: true,
+            data: stats
+        });
     })
 );
 

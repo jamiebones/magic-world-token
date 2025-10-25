@@ -1,0 +1,66 @@
+# Copilot Ignore - Sensitive Files
+
+# Environment files with secrets
+.env
+.env.*
+*.env
+.env.local
+.env.development
+.env.production
+.env.test
+api/.env
+api/.env.*
+frontend/.env
+frontend/.env.*
+frontend/.env.local
+
+# Private keys and certificates
+*.pem
+*.key
+*.p12
+*.pfx
+*.cer
+*.crt
+private-key.txt
+privatekey.txt
+
+# Wallet files
+**/wallets.csv
+**/private-keys.json
+**/wallet-*.json
+**/keystore/**
+
+# Encrypted sensitive data
+*.encrypted
+*.enc
+
+# Database dumps with sensitive data
+*.sql
+*.dump
+*.backup
+
+# API keys and secrets
+secrets.json
+credentials.json
+service-account*.json
+
+# Railway deployment files (may contain secrets)
+railway.json
+
+# Git history (may expose old secrets)
+.git/
+
+# Node modules (large and not needed for context)
+node_modules/
+**/node_modules/
+
+# Build artifacts
+dist/
+build/
+.next/
+out/
+
+# Logs (may contain sensitive info)
+*.log
+logs/
+**/*.log

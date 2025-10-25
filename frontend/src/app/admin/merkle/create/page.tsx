@@ -2,9 +2,8 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { CustomConnectButton } from "@/components/ConnectButton";
 import { useCreateDistribution } from "@/hooks/useMerkleDistribution";
-import { VaultType, type Allocation } from "@/types/merkle";
+import { VaultType, Allocation } from "@/types/merkle";
 
 export default function CreateDistributionPage() {
   const router = useRouter();
@@ -124,21 +123,6 @@ export default function CreateDistributionPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      {/* Header */}
-      <header className="border-b border-purple-500/20 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-              Create Merkle Distribution
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Set up a new gas-efficient token distribution
-            </p>
-          </div>
-          <CustomConnectButton />
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <div className="max-w-4xl mx-auto">

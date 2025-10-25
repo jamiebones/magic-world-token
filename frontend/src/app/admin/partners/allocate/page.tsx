@@ -9,26 +9,10 @@ import {
 import { useAllocateToPartner } from "@/hooks/usePartnerVaultOperations";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 import toast from "react-hot-toast";
-import { CustomConnectButton } from "@/components/ConnectButton";
 
 export default function PartnerAllocatePage() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
-      {/* Header */}
-      <header className="border-b border-purple-500/20 backdrop-blur-sm">
-        <div className="container mx-auto px-4 py-4 flex justify-between items-center">
-          <div>
-            <h1 className="text-2xl font-bold text-transparent bg-clip-text bg-gradient-to-r from-purple-400 to-pink-600">
-              Partner Allocation
-            </h1>
-            <p className="text-sm text-gray-400 mt-1">
-              Allocate tokens to partners with 3-year lockup
-            </p>
-          </div>
-          <CustomConnectButton />
-        </div>
-      </header>
-
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8">
         <RequireRole contract="vault" roleConstant="ADMIN_ROLE">

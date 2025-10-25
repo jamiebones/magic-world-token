@@ -1,9 +1,39 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc, bscTestnet } from 'wagmi/chains';
+import { http } from 'viem';
+
+// Configure chains with custom RPC URLs for better reliability
+const customBscTestnet = {
+  ...bscTestnet,
+  rpcUrls: {
+    default: {
+      http: [process.env.NEXT_PUBLIC_BSC_TESTNET_RPC || 'https://data-seed-prebsc-1-s1.binance.org:8545/']
+    },
+    public: {
+      http: [process.env.NEXT_PUBLIC_BSC_TESTNET_RPC || 'https://data-seed-prebsc-1-s1.binance.org:8545/']
+    }
+  }
+};
+
+const customBsc = {
+  ...bsc,
+  rpcUrls: {
+    default: {
+      http: [process.env.NEXT_PUBLIC_BSC_MAINNET_RPC || 'https://bsc-dataseed1.binance.org/']
+    },
+    public: {
+      http: [process.env.NEXT_PUBLIC_BSC_MAINNET_RPC || 'https://bsc-dataseed1.binance.org/']
+    }
+  }
+};
 
 export const config = getDefaultConfig({
-  appName: process.env.NEXT_PUBLIC_APP_NAME || 'Magic World Token',
+  appName: process.env.NEXT_PUBLIC_APP_NAME || 'Magic World',
   projectId: process.env.NEXT_PUBLIC_WALLETCONNECT_PROJECT_ID || '',
-  chains: [bsc, bscTestnet],
+  chains: [customBsc, customBscTestnet],
+  transports: {
+    [bsc.id]: http(process.env.NEXT_PUBLIC_BSC_MAINNET_RPC || 'https://bsc-dataseed1.binance.org/'),
+    [bscTestnet.id]: http(process.env.NEXT_PUBLIC_BSC_TESTNET_RPC || 'https://data-seed-prebsc-1-s1.binance.org:8545/')
+  },
   ssr: true,
 });

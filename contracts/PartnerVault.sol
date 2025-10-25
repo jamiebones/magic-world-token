@@ -2,6 +2,7 @@
 pragma solidity ^0.8.24;
 
 import "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
 import "@openzeppelin/contracts/access/AccessControl.sol";
 import "@openzeppelin/contracts/utils/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/utils/Pausable.sol";
@@ -20,6 +21,8 @@ import "@openzeppelin/contracts/utils/Pausable.sol";
  * - Role-based access control
  */
 contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
+    using SafeERC20 for IERC20;
+
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     IERC20 public immutable token;
 
@@ -111,10 +114,7 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
             "Insufficient vault balance"
         );
 
-        require(
-            token.transfer(msg.sender, allocation.amount),
-            "Transfer failed"
-        );
+        token.safeTransfer(msg.sender, allocation.amount);
 
         emit PartnerWithdrawn(msg.sender, allocation.amount, block.timestamp);
     }
@@ -178,10 +178,7 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
 
         allocation.withdrawn = true;
 
-        require(
-            token.transfer(partner, allocation.amount),
-            "Emergency transfer failed"
-        );
+        token.safeTransfer(partner, allocation.amount);
 
         emit PartnerWithdrawn(partner, allocation.amount, block.timestamp);
     }

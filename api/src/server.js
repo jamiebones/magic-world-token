@@ -9,6 +9,7 @@ require('dotenv').config();
 const logger = require('./utils/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 const { authMiddleware } = require('./middleware/auth');
+const cronJobsService = require('./services/cronJobs');
 
 // Import routes
 const tokenRoutes = require('./routes/tokens');
@@ -107,28 +108,47 @@ app.use('*', (req, res) => {
 });
 
 // Start server
-const server = app.listen(PORT, () => {
+const server = app.listen(PORT, async () => {
     logger.info(`🚀 Magic World Token API server running on port ${PORT}`);
     logger.info(`📚 API Documentation available at http://localhost:${PORT}/api-docs`);
     logger.info(`🌐 Environment: ${process.env.NODE_ENV}`);
     logger.info(`⛓️  Blockchain Network: ${process.env.BLOCKCHAIN_NETWORK}`);
+
+    // Initialize cron jobs
+    try {
+        await cronJobsService.initialize();
+        logger.info('⏰ Cron jobs initialized successfully');
+    } catch (error) {
+        logger.error('Failed to initialize cron jobs:', error);
+    }
 });
 
 // Graceful shutdown
-process.on('SIGTERM', () => {
-    logger.info('SIGTERM received, shutting down gracefully');
-    server.close(() => {
-        logger.info('Process terminated');
-        process.exit(0);
-    });
-});
+const gracefulShutdown = async () => {
+    logger.info('Shutting down gracefully...');
 
-process.on('SIGINT', () => {
-    logger.info('SIGINT received, shutting down gracefully');
+    // Stop cron jobs
+    try {
+        cronJobsService.stopAll();
+        logger.info('⏰ Cron jobs stopped');
+    } catch (error) {
+        logger.error('Error stopping cron jobs:', error);
+    }
+
+    // Close server
     server.close(() => {
-        logger.info('Process terminated');
+        logger.info('Server closed');
         process.exit(0);
     });
-});
+
+    // Force close after 10 seconds
+    setTimeout(() => {
+        logger.error('Could not close connections in time, forcefully shutting down');
+        process.exit(1);
+    }, 10000);
+};
+
+process.on('SIGTERM', gracefulShutdown);
+process.on('SIGINT', gracefulShutdown);
 
 module.exports = app;
