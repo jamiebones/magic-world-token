@@ -6,7 +6,7 @@ import { WagmiProvider } from "wagmi";
 import { RainbowKitProvider, darkTheme } from "@rainbow-me/rainbowkit";
 import { Toaster } from "react-hot-toast";
 import { config } from "@/config/wagmi";
-import { ReactNode, useState } from "react";
+import { ReactNode } from "react";
 
 // Create QueryClient outside component to avoid recreation on every render
 // This is the recommended pattern for Next.js App Router
