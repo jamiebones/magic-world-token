@@ -366,9 +366,9 @@ contract MagicWorldGems is
             address recipient = recipients[i];
             require(amounts[i] > 0, "MWG: Zero amount transfer");
             // Check for duplicate recipients
-            for (uint256 j = i + 1; j < recipients.length; j++) {
-                require(recipients[j] != recipient, "MWG: Duplicate recipient");
-            }
+            // for (uint256 j = i + 1; j < recipients.length; j++) {
+            //     require(recipients[j] != recipient, "MWG: Duplicate recipient");
+            // }
 
             totalAmount += amounts[i];
             _transfer(_msgSender(), recipient, amounts[i]);
@@ -410,13 +410,14 @@ contract MagicWorldGems is
         );
 
         // Validate recipients and perform transfers
-        for (uint256 i = 0; i < recipients.length; i++) {
+        uint256 i= 0;
+        for (i; i < recipients.length; i++) {
             address recipient = recipients[i];
 
             // Check for duplicate recipients
-            for (uint256 j = i + 1; j < recipients.length; j++) {
-                require(recipients[j] != recipient, "MWG: Duplicate recipient");
-            }
+            // for (uint256 j = i + 1; j < recipients.length; j++) {
+            //     require(recipients[j] != recipient, "MWG: Duplicate recipient");
+            // }
 
             _transfer(_msgSender(), recipient, amount);
         }

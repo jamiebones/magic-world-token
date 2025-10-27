@@ -97,6 +97,61 @@ contract PartnerVault is AccessControl, ReentrancyGuard, Pausable {
     }
 
     /**
+     * @dev Batch allocate tokens to multiple partners
+     * @param partners Array of partner addresses
+     * @param amounts Array of token amounts (must match partners length)
+     *
+     * Requirements:
+     * - Caller must have ADMIN_ROLE
+     * - Contract must not be paused
+     * - Arrays must have the same length
+     * - Arrays must not be empty
+     * - All partners must be valid addresses
+     * - All amounts must be greater than 0
+     * - Partners must not already have allocations
+     *
+     * Effects:
+     * - Allocates tokens to all partners with 3-year lockup
+     * - Updates totalAllocated
+     * - Adds partners to partnerAddresses array
+     * - Emits PartnerAllocated event for each partner
+     */
+    function batchAllocateToPartners(
+        address[] calldata partners,
+        uint256[] calldata amounts
+    ) external onlyRole(ADMIN_ROLE) whenNotPaused {
+        require(partners.length > 0, "Empty arrays");
+        require(partners.length == amounts.length, "Array length mismatch");
+
+        uint256 totalAmount = 0;
+
+        for (uint256 i = 0; i < partners.length; i++) {
+            address partner = partners[i];
+            uint256 amount = amounts[i];
+
+            require(partner != address(0), "Invalid partner address");
+            require(amount > 0, "Amount must be greater than 0");
+            require(
+                partnerAllocations[partner].amount == 0,
+                "Partner already allocated"
+            );
+
+            partnerAllocations[partner] = PartnerAllocation({
+                amount: amount,
+                allocatedAt: block.timestamp,
+                withdrawn: false
+            });
+
+            partnerAddresses.push(partner);
+            totalAmount += amount;
+
+            emit PartnerAllocated(partner, amount, block.timestamp);
+        }
+
+        totalAllocated += totalAmount;
+    }
+
+    /**
      * @dev Partner can withdraw their allocated tokens after lockup period
      */
     function withdraw() external nonReentrant whenNotPaused {

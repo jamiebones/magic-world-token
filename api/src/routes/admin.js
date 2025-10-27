@@ -9,6 +9,8 @@ const { generateEncryptedWallet, decryptPrivateKey } = require('../utils/walletU
 const logger = require('../utils/logger');
 const distributionFinalizer = require('../services/distributionFinalizer');
 const cronJobsService = require('../services/cronJobs');
+const walletBalanceMonitor = require('../services/walletBalanceMonitor');
+const emailService = require('../services/emailService');
 
 const router = express.Router();
 
@@ -1232,6 +1234,357 @@ router.get('/finalization/stats',
         res.json({
             success: true,
             data: stats
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/check:
+ *   post:
+ *     summary: Manually trigger wallet balance check (Admin only)
+ *     description: Immediately checks the monitored wallet balance and sends alerts if needed
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     responses:
+ *       200:
+ *         description: Balance check completed
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                   example: true
+ *                 data:
+ *                   type: array
+ *                   items:
+ *                     type: object
+ *                     properties:
+ *                       walletName:
+ *                         type: string
+ *                       walletAddress:
+ *                         type: string
+ *                       balance:
+ *                         type: string
+ *                       balanceNumber:
+ *                         type: number
+ *                       threshold:
+ *                         type: string
+ *                       belowThreshold:
+ *                         type: boolean
+ *                       alertSent:
+ *                         type: boolean
+ */
+router.post('/wallet-balance/check',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        logger.info(`Manual wallet balance check triggered by admin from ${req.ip}`);
+
+        const results = await cronJobsService.triggerManualBalanceCheck();
+
+        res.json({
+            success: true,
+            data: results
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/alerts:
+ *   get:
+ *     summary: Get wallet balance alert history (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: walletAddress
+ *         schema:
+ *           type: string
+ *         description: Filter by wallet address
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Number of results to return
+ *     responses:
+ *       200:
+ *         description: Alert history retrieved
+ */
+router.get('/wallet-balance/alerts',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { walletAddress, limit = 50 } = req.query;
+
+        const alerts = await walletBalanceMonitor.getAlertHistory(
+            walletAddress,
+            parseInt(limit)
+        );
+
+        res.json({
+            success: true,
+            data: {
+                count: alerts.length,
+                alerts
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/alerts/unresolved:
+ *   get:
+ *     summary: Get unresolved wallet balance alerts (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: limit
+ *         schema:
+ *           type: integer
+ *           default: 50
+ *         description: Number of results to return
+ *     responses:
+ *       200:
+ *         description: Unresolved alerts retrieved
+ */
+router.get('/wallet-balance/alerts/unresolved',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { limit = 50 } = req.query;
+
+        const alerts = await walletBalanceMonitor.getUnresolvedAlerts(parseInt(limit));
+
+        res.json({
+            success: true,
+            data: {
+                count: alerts.length,
+                alerts
+            }
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/stats:
+ *   get:
+ *     summary: Get wallet balance monitoring statistics (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *       - in: query
+ *         name: days
+ *         schema:
+ *           type: integer
+ *           default: 7
+ *         description: Number of days to calculate stats for
+ *     responses:
+ *       200:
+ *         description: Wallet balance statistics
+ */
+router.get('/wallet-balance/stats',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const { days = 7 } = req.query;
+
+        const stats = await walletBalanceMonitor.getStatistics(parseInt(days));
+
+        res.json({
+            success: true,
+            data: stats
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/config:
+ *   get:
+ *     summary: Get wallet balance monitoring configuration (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     responses:
+ *       200:
+ *         description: Configuration retrieved
+ */
+router.get('/wallet-balance/config',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        const config = await walletBalanceMonitor.getConfiguration();
+
+        res.json({
+            success: true,
+            data: config
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/config:
+ *   put:
+ *     summary: Update wallet balance monitoring configuration (Admin only)
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: false
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             properties:
+ *               walletAddress:
+ *                 type: string
+ *                 description: New wallet address to monitor
+ *               walletName:
+ *                 type: string
+ *                 description: Descriptive name for the wallet
+ *               threshold:
+ *                 type: number
+ *                 description: New balance threshold (in BNB)
+ *     responses:
+ *       200:
+ *         description: Configuration updated
+ */
+router.put('/wallet-balance/config',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('walletAddress')
+            .optional()
+            .isEthereumAddress()
+            .withMessage('Invalid Ethereum address'),
+        body('walletName')
+            .optional()
+            .isString()
+            .trim()
+            .isLength({ min: 1, max: 100 })
+            .withMessage('Wallet name must be 1-100 characters'),
+        body('threshold')
+            .optional()
+            .isFloat({ min: 0 })
+            .withMessage('Threshold must be a positive number')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { walletAddress, walletName, threshold } = req.body;
+
+        logger.info(`Wallet balance configuration updated by admin from ${req.ip}`, {
+            walletAddress,
+            walletName,
+            threshold
+        });
+
+        const config = await walletBalanceMonitor.updateConfiguration({
+            walletAddress,
+            walletName,
+            threshold
+        });
+
+        res.json({
+            success: true,
+            data: config,
+            message: 'Configuration updated successfully'
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/wallet-balance/test-email:
+ *   post:
+ *     summary: Test email configuration (Admin only)
+ *     description: Sends a test email to verify Gmail configuration is working
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     responses:
+ *       200:
+ *         description: Test email sent successfully
+ *       500:
+ *         description: Email configuration error
+ */
+router.post('/wallet-balance/test-email',
+    adminRateLimit,
+    validateAdminSecret,
+    asyncHandler(async (req, res) => {
+        logger.info(`Test email requested by admin from ${req.ip}`);
+
+        const result = await emailService.testEmail();
+
+        if (!result.success) {
+            return res.status(500).json({
+                success: false,
+                error: {
+                    message: 'Failed to send test email',
+                    code: 'EMAIL_TEST_FAILED',
+                    details: result.error
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            data: {
+                messageId: result.messageId,
+                recipients: result.recipients
+            },
+            message: 'Test email sent successfully'
         });
     })
 );

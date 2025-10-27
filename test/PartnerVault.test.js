@@ -439,4 +439,209 @@ describe("PartnerVault", function () {
             });
         });
     });
+
+    describe("Batch Allocation", function () {
+        const allocation1 = ethers.parseEther("10000");
+        const allocation2 = ethers.parseEther("20000");
+        const allocation3 = ethers.parseEther("15000");
+
+        it("Should allow admin to batch allocate tokens to multiple partners", async function () {
+            const partners = [partner1.address, partner2.address, partner3.address];
+            const amounts = [allocation1, allocation2, allocation3];
+
+            const tx = await partnerVault.batchAllocateToPartners(partners, amounts);
+            const receipt = await tx.wait();
+
+            // Check that PartnerAllocated events were emitted for each partner
+            const events = receipt.logs.filter(log => {
+                try {
+                    return partnerVault.interface.parseLog(log)?.name === 'PartnerAllocated';
+                } catch {
+                    return false;
+                }
+            });
+
+            expect(events.length).to.equal(3);
+
+            // Verify allocations
+            const alloc1 = await partnerVault.getPartnerAllocation(partner1.address);
+            const alloc2 = await partnerVault.getPartnerAllocation(partner2.address);
+            const alloc3 = await partnerVault.getPartnerAllocation(partner3.address);
+
+            expect(alloc1[0]).to.equal(allocation1);
+            expect(alloc2[0]).to.equal(allocation2);
+            expect(alloc3[0]).to.equal(allocation3);
+
+            // Verify total allocated
+            const totalExpected = allocation1 + allocation2 + allocation3;
+            expect(await partnerVault.totalAllocated()).to.equal(totalExpected);
+
+            // Verify partner count
+            expect(await partnerVault.getPartnerCount()).to.equal(3);
+        });
+
+        it("Should revert if arrays are empty", async function () {
+            await expect(
+                partnerVault.batchAllocateToPartners([], [])
+            ).to.be.revertedWith("Empty arrays");
+        });
+
+        it("Should revert if array lengths don't match", async function () {
+            const partners = [partner1.address, partner2.address];
+            const amounts = [allocation1]; // Different length
+
+            await expect(
+                partnerVault.batchAllocateToPartners(partners, amounts)
+            ).to.be.revertedWith("Array length mismatch");
+        });
+
+        it("Should revert if any partner address is zero", async function () {
+            const partners = [partner1.address, ethers.ZeroAddress, partner3.address];
+            const amounts = [allocation1, allocation2, allocation3];
+
+            await expect(
+                partnerVault.batchAllocateToPartners(partners, amounts)
+            ).to.be.revertedWith("Invalid partner address");
+        });
+
+        it("Should revert if any amount is zero", async function () {
+            const partners = [partner1.address, partner2.address, partner3.address];
+            const amounts = [allocation1, 0, allocation3]; // Zero amount
+
+            await expect(
+                partnerVault.batchAllocateToPartners(partners, amounts)
+            ).to.be.revertedWith("Amount must be greater than 0");
+        });
+
+        it("Should revert if any partner already has allocation", async function () {
+            // First allocation
+            await partnerVault.allocateToPartner(partner1.address, allocation1);
+
+            // Try to batch allocate including partner1
+            const partners = [partner1.address, partner2.address];
+            const amounts = [allocation1, allocation2];
+
+            await expect(
+                partnerVault.batchAllocateToPartners(partners, amounts)
+            ).to.be.revertedWith("Partner already allocated");
+        });
+
+        it("Should revert if called by non-admin", async function () {
+            const partners = [partner1.address, partner2.address];
+            const amounts = [allocation1, allocation2];
+
+            await expect(
+                partnerVault.connect(partner1).batchAllocateToPartners(partners, amounts)
+            ).to.be.reverted;
+        });
+
+        it("Should revert if contract is paused", async function () {
+            await partnerVault.pause();
+
+            const partners = [partner1.address, partner2.address];
+            const amounts = [allocation1, allocation2];
+
+            await expect(
+                partnerVault.batchAllocateToPartners(partners, amounts)
+            ).to.be.revertedWithCustomError(partnerVault, "EnforcedPause");
+        });
+
+        it("Should handle large batches correctly", async function () {
+            // Create arrays with 10 partners
+            const partners = [];
+            const amounts = [];
+            const signers = await ethers.getSigners();
+
+            for (let i = 0; i < 10; i++) {
+                partners.push(signers[i + 5].address); // Use signers starting from index 5
+                amounts.push(ethers.parseEther("1000"));
+            }
+
+            await expect(partnerVault.batchAllocateToPartners(partners, amounts))
+                .to.not.be.reverted;
+
+            // Verify all allocations
+            for (let i = 0; i < 10; i++) {
+                const alloc = await partnerVault.getPartnerAllocation(partners[i]);
+                expect(alloc[0]).to.equal(amounts[i]);
+            }
+
+            expect(await partnerVault.getPartnerCount()).to.equal(10);
+        });
+
+        it("Should update totalAllocated correctly for batch", async function () {
+            const initialTotal = await partnerVault.totalAllocated();
+
+            const partners = [partner1.address, partner2.address, partner3.address];
+            const amounts = [allocation1, allocation2, allocation3];
+
+            await partnerVault.batchAllocateToPartners(partners, amounts);
+
+            const expectedTotal = initialTotal + allocation1 + allocation2 + allocation3;
+            expect(await partnerVault.totalAllocated()).to.equal(expectedTotal);
+        });
+
+        it("Should add all partners to partnerAddresses array", async function () {
+            const partners = [partner1.address, partner2.address, partner3.address];
+            const amounts = [allocation1, allocation2, allocation3];
+
+            await partnerVault.batchAllocateToPartners(partners, amounts);
+
+            const allPartners = await partnerVault.getAllPartners();
+            expect(allPartners.length).to.equal(3);
+            expect(allPartners[0]).to.equal(partner1.address);
+            expect(allPartners[1]).to.equal(partner2.address);
+            expect(allPartners[2]).to.equal(partner3.address);
+        });
+
+        it("Should work correctly with getPartnersWithDetails after batch allocation", async function () {
+            const partners = [partner1.address, partner2.address, partner3.address];
+            const amounts = [allocation1, allocation2, allocation3];
+
+            await partnerVault.batchAllocateToPartners(partners, amounts);
+
+            const [returnedPartners, returnedAmounts, allocatedAts, withdrawns] =
+                await partnerVault.getPartnersWithDetails(0, 10);
+
+            expect(returnedPartners.length).to.equal(3);
+            expect(returnedAmounts[0]).to.equal(allocation1);
+            expect(returnedAmounts[1]).to.equal(allocation2);
+            expect(returnedAmounts[2]).to.equal(allocation3);
+            expect(withdrawns[0]).to.be.false;
+            expect(withdrawns[1]).to.be.false;
+            expect(withdrawns[2]).to.be.false;
+        });
+
+        it("Should set correct allocation timestamps for all partners", async function () {
+            const partners = [partner1.address, partner2.address];
+            const amounts = [allocation1, allocation2];
+
+            const tx = await partnerVault.batchAllocateToPartners(partners, amounts);
+            const receipt = await tx.wait();
+            const blockTimestamp = (await ethers.provider.getBlock(receipt.blockNumber)).timestamp;
+
+            const alloc1 = await partnerVault.getPartnerAllocation(partner1.address);
+            const alloc2 = await partnerVault.getPartnerAllocation(partner2.address);
+
+            expect(alloc1[1]).to.equal(blockTimestamp); // allocatedAt
+            expect(alloc2[1]).to.equal(blockTimestamp); // allocatedAt
+        });
+
+        it("Should allow mixing single and batch allocations", async function () {
+            // Single allocation first
+            await partnerVault.allocateToPartner(partner1.address, allocation1);
+
+            // Batch allocation for remaining partners
+            const partners = [partner2.address, partner3.address];
+            const amounts = [allocation2, allocation3];
+
+            await expect(partnerVault.batchAllocateToPartners(partners, amounts))
+                .to.not.be.reverted;
+
+            expect(await partnerVault.getPartnerCount()).to.equal(3);
+
+            const totalExpected = allocation1 + allocation2 + allocation3;
+            expect(await partnerVault.totalAllocated()).to.equal(totalExpected);
+        });
+    });
 });

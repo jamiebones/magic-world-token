@@ -10,6 +10,8 @@ const logger = require('./utils/logger');
 const { errorHandler } = require('./middleware/errorHandler');
 const { authMiddleware } = require('./middleware/auth');
 const cronJobsService = require('./services/cronJobs');
+const emailService = require('./services/emailService');
+const walletBalanceMonitor = require('./services/walletBalanceMonitor');
 
 // Import routes
 const tokenRoutes = require('./routes/tokens');
@@ -114,7 +116,21 @@ const server = app.listen(PORT, async () => {
     logger.info(`🌐 Environment: ${process.env.NODE_ENV}`);
     logger.info(`⛓️  Blockchain Network: ${process.env.BLOCKCHAIN_NETWORK}`);
 
-    // Initialize cron jobs
+    // Initialize email service (non-critical - continue if fails)
+    try {
+        await emailService.initialize();
+    } catch (error) {
+        logger.warn('⚠️  Email service initialization failed (non-critical):', error.message);
+    }
+
+    // Initialize wallet balance monitor (non-critical - continue if fails)
+    try {
+        await walletBalanceMonitor.initialize();
+    } catch (error) {
+        logger.warn('⚠️  Wallet balance monitor initialization failed (non-critical):', error.message);
+    }
+
+    // Initialize cron jobs (includes wallet balance checking)
     try {
         await cronJobsService.initialize();
         logger.info('⏰ Cron jobs initialized successfully');
