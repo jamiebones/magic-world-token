@@ -36,3 +36,30 @@ export const VAULT_NAMES = {
   [VaultType.SOCIAL_POSTERS]: 'Social Posters',
   [VaultType.ECOSYSTEM_FUND]: 'Ecosystem Fund',
 } as const;
+
+// PancakeSwap V3 Contracts
+export const PANCAKESWAP_V3 = {
+  FACTORY: "0x0BFbCF9fa4f9C56B0F40a671Ad40E0805A091865" as `0x${string}`,
+  POSITION_MANAGER: "0x46A15B0b27311cedF172AB29E4f4766fbE7F4364" as `0x${string}`,
+  ROUTER: "0x1b81D678ffb9C0263b24A97847620C99d213eB14" as `0x${string}`,
+  WBNB: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c" as `0x${string}`,
+} as const;
+
+export const FEE_TIERS = {
+  LOWEST: 100,    // 0.01%
+  LOW: 500,       // 0.05%
+  MEDIUM: 2500,   // 0.25%
+  HIGH: 10000,    // 1%
+} as const;
+
+// Network-aware helpers
+const WBNB_BY_CHAIN: Record<number, `0x${string}`> = {
+  [SUPPORTED_CHAINS.BSC_MAINNET]: "0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c",
+  [SUPPORTED_CHAINS.BSC_TESTNET]: "0xae13d989dac2f0debff460ac112a837c89baa7cd",
+};
+
+export function getWBNBAddress(chainId?: number): `0x${string}` {
+  const id = chainId ?? DEFAULT_CHAIN_ID;
+  return (WBNB_BY_CHAIN[id] ?? PANCAKESWAP_V3.WBNB) as `0x${string}`;
+}
+
