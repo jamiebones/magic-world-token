@@ -124,21 +124,21 @@ export default function LiquidityPositionsPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gray-50 p-8">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 p-8">
       <div className="max-w-6xl mx-auto">
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900">
+        <div className="mb-8 text-center">
+          <h1 className="text-4xl font-bold text-white mb-2">
             My Liquidity Positions
           </h1>
-          <p className="text-gray-600 mt-2">
+          <p className="text-gray-300">
             Manage your PancakeSwap V3 liquidity positions
           </p>
         </div>
 
         {/* Connection Warning */}
         {!isConnected && (
-          <div className="mb-6 p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
-            <p className="text-yellow-800">
+          <div className="mb-6 p-4 bg-yellow-500/10 border border-yellow-500/30 rounded-lg backdrop-blur-sm">
+            <p className="text-yellow-300 font-medium">
               ⚠️ Please connect your wallet to view your positions
             </p>
           </div>
@@ -150,7 +150,7 @@ export default function LiquidityPositionsPage() {
             <button
               onClick={loadPositions}
               disabled={loadingPositions}
-              className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed"
+              className="px-6 py-3 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-600 disabled:to-gray-700 disabled:cursor-not-allowed shadow-lg transition-all font-medium"
             >
               {loadingPositions ? "⏳ Loading..." : "🔄 Refresh Positions"}
             </button>
@@ -160,19 +160,19 @@ export default function LiquidityPositionsPage() {
         {/* Loading State */}
         {loadingPositions && (
           <div className="text-center py-12">
-            <p className="text-gray-600 text-lg">Loading your positions...</p>
+            <p className="text-gray-300 text-lg">Loading your positions...</p>
           </div>
         )}
 
         {/* No Positions */}
         {!loadingPositions && positions.length === 0 && isConnected && (
-          <div className="bg-white rounded-lg shadow-md p-12 text-center">
-            <p className="text-gray-600 text-lg mb-4">
+          <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-xl p-12 text-center border border-purple-500/20">
+            <p className="text-gray-300 text-lg mb-6">
               You don&apos;t have any liquidity positions yet
             </p>
             <a
               href="/admin/liquidity"
-              className="inline-block px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700"
+              className="inline-block px-8 py-3 bg-gradient-to-r from-green-600 to-emerald-600 text-white rounded-xl hover:from-green-700 hover:to-emerald-700 shadow-lg transition-all font-medium"
             >
               💧 Add Liquidity
             </a>
@@ -191,23 +191,23 @@ export default function LiquidityPositionsPage() {
               return (
                 <div
                   key={position.tokenId.toString()}
-                  className="bg-white rounded-lg shadow-md p-6 border-2 border-gray-200 hover:border-blue-300 transition-colors"
+                  className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-xl p-6 border-2 border-purple-500/20 hover:border-purple-500/40 transition-all"
                 >
                   {/* Header */}
                   <div className="flex justify-between items-start mb-4">
                     <div>
-                      <h3 className="text-xl font-bold text-gray-900">
+                      <h3 className="text-xl font-bold text-white">
                         {token0Symbol}/{token1Symbol}
                       </h3>
-                      <p className="text-sm text-gray-500">
+                      <p className="text-sm text-gray-400">
                         Position #{position.tokenId.toString()}
                       </p>
                     </div>
                     <span
                       className={`px-3 py-1 rounded-full text-sm font-semibold ${
                         inRange
-                          ? "bg-green-100 text-green-800"
-                          : "bg-red-100 text-red-800"
+                          ? "bg-green-500/20 text-green-400 border border-green-500/30"
+                          : "bg-red-500/20 text-red-400 border border-red-500/30"
                       }`}
                     >
                       {inRange ? "✅ In Range" : "❌ Out of Range"}
@@ -217,22 +217,22 @@ export default function LiquidityPositionsPage() {
                   {/* Details */}
                   <div className="space-y-3 mb-6">
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Fee Tier:</span>
-                      <span className="font-medium">
+                      <span className="text-gray-400">Fee Tier:</span>
+                      <span className="font-medium text-gray-200">
                         {getFeeTierLabel(position.fee)}
                       </span>
                     </div>
 
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Tick Range:</span>
-                      <span className="font-mono text-xs">
+                      <span className="text-gray-400">Tick Range:</span>
+                      <span className="font-mono text-xs text-gray-300">
                         [{position.tickLower}, {position.tickUpper}]
                       </span>
                     </div>
 
                     <div className="flex justify-between text-sm">
-                      <span className="text-gray-600">Liquidity:</span>
-                      <span className="font-medium">
+                      <span className="text-gray-400">Liquidity:</span>
+                      <span className="font-medium text-gray-200">
                         {position.liquidity.toString()}
                       </span>
                     </div>
@@ -240,14 +240,14 @@ export default function LiquidityPositionsPage() {
                     {/* Fees Earned */}
                     {(position.tokensOwed0 > BigInt(0) ||
                       position.tokensOwed1 > BigInt(0)) && (
-                      <div className="bg-green-50 p-3 rounded-lg mt-4">
-                        <p className="text-sm font-semibold text-green-900 mb-2">
+                      <div className="bg-green-500/10 border border-green-500/30 p-3 rounded-lg mt-4 backdrop-blur-sm">
+                        <p className="text-sm font-semibold text-green-400 mb-2">
                           💰 Fees Earned
                         </p>
                         <div className="space-y-1 text-sm">
                           {position.tokensOwed0 > BigInt(0) && (
                             <div className="flex justify-between">
-                              <span className="text-gray-600">
+                              <span className="text-gray-400">
                                 {token0Symbol}:
                               </span>
                               <span className="font-medium">

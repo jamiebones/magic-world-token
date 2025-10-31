@@ -422,20 +422,22 @@ export default function AddLiquidityPage() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 p-4 md:p-8">
-      <div className="max-w-3xl mx-auto">
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      <div className="max-w-3xl mx-auto px-4 py-8">
         {/* Header */}
         <div className="mb-6 text-center">
-          <h1 className="text-4xl font-bold text-gray-900 mb-2">
-            Add Liquidity
-          </h1>
-          <p className="text-gray-600">
+          <h1 className="text-4xl font-bold text-white mb-2">Add Liquidity</h1>
+          <p className="text-gray-300">
             PancakeSwap V3 • MWG/BNB • BSC Mainnet
           </p>
           {chain && (
-            <div className="mt-2 inline-block px-3 py-1 bg-white rounded-full text-sm">
-              <span className="font-medium">Network:</span>{" "}
-              <span className={chain.id === 56 ? "text-green-600" : "text-yellow-600"}>
+            <div className="mt-2 inline-block px-3 py-1 bg-gray-800/50 rounded-full text-sm backdrop-blur-sm border border-purple-500/20">
+              <span className="font-medium text-gray-300">Network:</span>{" "}
+              <span
+                className={
+                  chain.id === 56 ? "text-green-400" : "text-yellow-400"
+                }
+              >
                 {chain.name}
               </span>
             </div>
@@ -444,8 +446,8 @@ export default function AddLiquidityPage() {
 
         {/* Connection Warning */}
         {!isConnected && (
-          <div className="mb-6 p-4 bg-yellow-50 border-l-4 border-yellow-400 rounded-r-lg">
-            <p className="text-yellow-800 font-medium">
+          <div className="mb-6 p-4 bg-yellow-900/20 border-l-4 border-yellow-400 rounded-r-lg backdrop-blur-sm">
+            <p className="text-yellow-200 font-medium">
               🔌 Connect your wallet to continue
             </p>
           </div>
@@ -453,20 +455,21 @@ export default function AddLiquidityPage() {
 
         {/* Error Display */}
         {error && (
-          <div className="mb-6 p-4 bg-red-50 border-l-4 border-red-400 rounded-r-lg">
-            <p className="text-red-800 font-medium">❌ {error}</p>
+          <div className="mb-6 p-4 bg-red-900/20 border-l-4 border-red-400 rounded-r-lg backdrop-blur-sm">
+            <p className="text-red-200 font-medium">❌ {error}</p>
           </div>
         )}
 
         {/* Success Display */}
         {txStatus === "success" && (
-          <div className="mb-6 p-6 bg-green-50 border-l-4 border-green-400 rounded-r-lg">
-            <h3 className="text-xl font-semibold text-green-900 mb-2">
+          <div className="mb-6 p-6 bg-green-900/20 border-l-4 border-green-400 rounded-r-lg backdrop-blur-sm">
+            <h3 className="text-xl font-semibold text-green-200 mb-2">
               ✅ Liquidity Added Successfully!
             </h3>
             {positionId && (
               <p className="text-green-800 mb-4">
-                Position NFT ID: <span className="font-mono">{positionId.toString()}</span>
+                Position NFT ID:{" "}
+                <span className="font-mono">{positionId.toString()}</span>
               </p>
             )}
             <button
@@ -481,13 +484,15 @@ export default function AddLiquidityPage() {
         {/* Main Configuration Card */}
         {txStatus !== "success" && (
           <>
-            <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-              <h2 className="text-2xl font-bold mb-6 text-gray-900">Configuration</h2>
-              
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6 border border-purple-500/20">
+              <h2 className="text-2xl font-bold mb-6 text-white">
+                Configuration
+              </h2>
+
               <div className="space-y-6">
                 {/* Quick Presets */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
                     Quick Presets
                   </label>
                   <div className="grid grid-cols-3 gap-3">
@@ -501,20 +506,23 @@ export default function AddLiquidityPage() {
                         onClick={() => setTotalLiquidityUSD(preset.value)}
                         className={`p-3 rounded-lg border-2 transition-all ${
                           totalLiquidityUSD === preset.value
-                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
-                            : "border-gray-200 hover:border-blue-300 hover:shadow"
+                            ? "border-purple-500 bg-purple-500/20 text-white shadow-md"
+                            : "border-gray-600 hover:border-purple-400 hover:shadow text-gray-300"
                         }`}
                       >
                         <div className="font-semibold">{preset.label}</div>
-                        <div className="text-sm text-gray-600">${preset.value}</div>
+                        <div className="text-sm text-gray-400">
+                          ${preset.value}
+                        </div>
                       </button>
                     ))}
                   </div>
                 </div>
 
                 {/* Total Liquidity */}
+                {/* Total Liquidity */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Total Liquidity (USD)
                   </label>
                   <input
@@ -522,10 +530,10 @@ export default function AddLiquidityPage() {
                     step="1"
                     value={totalLiquidityUSD}
                     onChange={(e) => setTotalLiquidityUSD(e.target.value)}
-                    className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition-all text-lg"
+                    className="w-full px-4 py-3 bg-gray-900/50 border-2 border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 transition-all text-lg"
                     placeholder="1000"
                   />
-                  <p className="text-sm text-gray-500 mt-1">
+                  <p className="text-sm text-gray-400 mt-1">
                     Total USD value to provide (split between BNB and MWG)
                   </p>
                 </div>
@@ -534,7 +542,7 @@ export default function AddLiquidityPage() {
                 <div className="grid md:grid-cols-2 gap-4">
                   {/* Target Token Price */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Target MWG Price (USD)
                     </label>
                     <input
@@ -542,14 +550,14 @@ export default function AddLiquidityPage() {
                       step="0.00001"
                       value={targetPriceUSD}
                       onChange={(e) => setTargetPriceUSD(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 bg-gray-900/50 border-2 border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       placeholder="0.0003"
                     />
                   </div>
 
                   {/* BNB Price */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                    <label className="block text-sm font-medium text-gray-300 mb-2">
                       Current BNB Price (USD)
                     </label>
                     <input
@@ -557,7 +565,7 @@ export default function AddLiquidityPage() {
                       step="1"
                       value={bnbPriceUSD}
                       onChange={(e) => setBnbPriceUSD(e.target.value)}
-                      className="w-full px-4 py-3 border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                      className="w-full px-4 py-3 bg-gray-900/50 border-2 border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
                       placeholder="600"
                     />
                   </div>
@@ -565,7 +573,7 @@ export default function AddLiquidityPage() {
 
                 {/* Fee Tier */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
                     Fee Tier
                   </label>
                   <div className="grid grid-cols-4 gap-3">
@@ -575,25 +583,26 @@ export default function AddLiquidityPage() {
                         onClick={() => setSelectedFeeTier(value)}
                         className={`p-3 rounded-lg border-2 transition-all ${
                           selectedFeeTier === value
-                            ? "border-blue-500 bg-blue-50 text-blue-700 shadow-md"
-                            : "border-gray-200 hover:border-blue-300"
+                            ? "border-purple-500 bg-purple-500/20 text-white shadow-md"
+                            : "border-gray-600 hover:border-purple-400 text-gray-300"
                         }`}
                       >
                         <div className="font-semibold text-sm">
                           {(value / 10000).toFixed(2)}%
                         </div>
-                        <div className="text-xs text-gray-500 mt-1">{name}</div>
+                        <div className="text-xs text-gray-400 mt-1">{name}</div>
                       </button>
                     ))}
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">
-                    <span className="font-medium">Recommended:</span> 0.25% for most token pairs
+                  <p className="text-sm text-gray-400 mt-2">
+                    <span className="font-medium">Recommended:</span> 0.25% for
+                    most token pairs
                   </p>
                 </div>
 
                 {/* Price Range */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-300 mb-2">
                     Price Range: ±{priceRangePercent}%
                   </label>
                   <input
@@ -602,22 +611,27 @@ export default function AddLiquidityPage() {
                     max="100"
                     step="5"
                     value={priceRangePercent}
-                    onChange={(e) => setPriceRangePercent(Number(e.target.value))}
-                    className="w-full h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+                    onChange={(e) =>
+                      setPriceRangePercent(Number(e.target.value))
+                    }
+                    className="w-full h-2 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-purple-500"
                   />
-                  <div className="flex justify-between text-xs text-gray-500 mt-2">
+                  <div className="flex justify-between text-xs text-gray-400 mt-2">
                     <span>±10% Narrow</span>
-                    <span className="font-medium text-blue-600">±{priceRangePercent}%</span>
+                    <span className="font-medium text-purple-400">
+                      ±{priceRangePercent}%
+                    </span>
                     <span>±100% Wide</span>
                   </div>
-                  <p className="text-sm text-gray-500 mt-2">
-                    Narrower ranges earn more fees but need rebalancing more often
+                  <p className="text-sm text-gray-400 mt-2">
+                    Narrower ranges earn more fees but need rebalancing more
+                    often
                   </p>
                 </div>
 
                 {/* Slippage */}
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-3">
+                  <label className="block text-sm font-medium text-gray-300 mb-3">
                     Slippage Tolerance
                   </label>
                   <div className="flex gap-3">
@@ -627,8 +641,8 @@ export default function AddLiquidityPage() {
                         onClick={() => setSlippageTolerance(value)}
                         className={`flex-1 px-4 py-2 rounded-lg border-2 transition-all ${
                           slippageTolerance === value
-                            ? "border-blue-500 bg-blue-50 text-blue-700 font-medium"
-                            : "border-gray-200 hover:border-blue-300"
+                            ? "border-purple-500 bg-purple-500/20 text-white font-medium"
+                            : "border-gray-600 hover:border-purple-400 text-gray-300"
                         }`}
                       >
                         {value}%
@@ -647,13 +661,29 @@ export default function AddLiquidityPage() {
                   !totalLiquidityUSD ||
                   !bnbPriceUSD
                 }
-                className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-blue-600 to-indigo-600 text-white rounded-xl hover:from-blue-700 hover:to-indigo-700 disabled:from-gray-400 disabled:to-gray-400 disabled:cursor-not-allowed font-semibold transition-all text-lg shadow-lg hover:shadow-xl"
+                className="w-full mt-6 px-6 py-4 bg-gradient-to-r from-purple-600 to-pink-600 text-white rounded-xl hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 disabled:cursor-not-allowed font-semibold transition-all text-lg shadow-lg hover:shadow-xl"
               >
                 {isCalculating ? (
                   <span className="flex items-center justify-center">
-                    <svg className="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                    <svg
+                      className="animate-spin -ml-1 mr-3 h-5 w-5 text-white"
+                      xmlns="http://www.w3.org/2000/svg"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      ></circle>
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                      ></path>
                     </svg>
                     Calculating...
                   </span>
@@ -665,414 +695,426 @@ export default function AddLiquidityPage() {
 
             {/* Calculation Results */}
             {calculated && (
-          <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
-            <h2 className="text-xl font-semibold mb-4">
-              📊 Calculation Results
-            </h2>
+              <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6 border border-purple-500/20">
+                <h2 className="text-xl font-semibold mb-4 text-white">
+                  📊 Calculation Results
+                </h2>
 
-            <div className="space-y-4">
-              {/* Required Amounts */}
-              <div className="bg-blue-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-blue-900 mb-2">
-                  Required Token Amounts
-                </h3>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <p className="text-sm text-gray-600">BNB Needed</p>
-                    <p className="text-xl font-bold text-blue-900">
-                      {formatNumber(calculated.bnbAmount, 6)} BNB
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      ≈ $
-                      {formatNumber(
-                        calculated.bnbAmount * parseFloat(bnbPriceUSD),
-                        2
-                      )}
-                    </p>
-                  </div>
-                  <div>
-                    <p className="text-sm text-gray-600">MWG Needed</p>
-                    <p className="text-xl font-bold text-blue-900">
-                      {formatNumber(calculated.mwgAmount, 0)} MWG
-                    </p>
-                    <p className="text-sm text-gray-500">
-                      ≈ $
-                      {formatNumber(
-                        calculated.mwgAmount * parseFloat(targetPriceUSD),
-                        2
-                      )}
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              {/* At current pool price */}
-              {poolExists && poolSqrtPriceX96 && (
-                <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
-                  <h3 className="font-semibold text-amber-900 mb-2">
-                    At Current Pool Price
-                  </h3>
-
-                  {/* Show if pool is empty but has a price */}
-                  {poolBalancesState &&
-                    poolBalancesState.bnb === 0 &&
-                    poolBalancesState.mwg === 0 && (
-                      <div className="mb-3 p-3 bg-yellow-100 border border-yellow-300 rounded">
-                        <p className="text-sm text-yellow-900 font-medium">
-                          ⚠️ Pool is empty but has an initialized price
+                <div className="space-y-4">
+                  {/* Required Amounts */}
+                  <div className="bg-purple-900/20 p-4 rounded-lg border border-purple-500/20">
+                    <h3 className="font-semibold text-purple-300 mb-2">
+                      Required Token Amounts
+                    </h3>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-sm text-gray-400">BNB Needed</p>
+                        <p className="text-xl font-bold text-white">
+                          {formatNumber(calculated.bnbAmount, 6)} BNB
                         </p>
-                        <p className="text-xs text-yellow-800 mt-1">
-                          Someone created this pool previously. The price below
-                          is the last known price. You can provide liquidity
-                          around this price, or choose a different price range.
+                        <p className="text-sm text-gray-500">
+                          ≈ $
+                          {formatNumber(
+                            calculated.bnbAmount * parseFloat(bnbPriceUSD),
+                            2
+                          )}
                         </p>
                       </div>
-                    )}
+                      <div>
+                        <p className="text-sm text-gray-400">MWG Needed</p>
+                        <p className="text-xl font-bold text-white">
+                          {formatNumber(calculated.mwgAmount, 0)} MWG
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          ≈ $
+                          {formatNumber(
+                            calculated.mwgAmount * parseFloat(targetPriceUSD),
+                            2
+                          )}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
 
-                  {/* Critical warning if pool price seems inverted */}
-                  {poolPrice && poolPrice.mwgUsd > 1000000 && (
-                    <div className="mb-3 p-3 bg-red-100 border-2 border-red-500 rounded">
-                      <p className="text-sm text-red-900 font-bold">
-                        🚨 CRITICAL: Pool Initialized with Inverted Price!
-                      </p>
-                      <p className="text-xs text-red-800 mt-1">
-                        The current pool price is{" "}
-                        <strong>${formatNumber(poolPrice.mwgUsd, 0)}</strong>{" "}
-                        per MWG token. This is likely backwards. The pool was
-                        probably initialized with the inverse of the intended
-                        price.
-                      </p>
-                      <p className="text-xs text-red-800 mt-2 font-medium">
-                        ⚠️ This pool is effectively unusable at this price. You
-                        should either:
-                      </p>
-                      <ul className="text-xs text-red-800 mt-1 ml-4 list-disc">
-                        <li>
-                          Deploy a new pool with the correct initial price
-                          (click button below)
-                        </li>
-                        <li>
-                          Or if this price is correct, your target price of $
-                          {targetPriceUSD} is incompatible
-                        </li>
-                      </ul>
-                      <button
-                        onClick={async () => {
-                          if (
-                            !confirm(
-                              `Create a NEW pool with 0.05% fee tier at $${targetPriceUSD} per MWG?\n\nThis will NOT fix the existing 0.25% fee pool. You'll need to update the fee tier in your UI to 500 (0.05%) after creation.`
-                            )
-                          ) {
-                            return;
-                          }
+                  {/* At current pool price */}
+                  {poolExists && poolSqrtPriceX96 && (
+                    <div className="bg-amber-50 p-4 rounded-lg border border-amber-200">
+                      <h3 className="font-semibold text-amber-900 mb-2">
+                        At Current Pool Price
+                      </h3>
 
-                          try {
-                            const { token0 } = getTokenOrder(
-                              CONTRACT_ADDRESSES.TOKEN,
-                              getWBNBAddress(chain?.id)
-                            );
-                            const token0IsMWG =
-                              token0.toLowerCase() ===
-                              CONTRACT_ADDRESSES.TOKEN.toLowerCase();
+                      {/* Show if pool is empty but has a price */}
+                      {poolBalancesState &&
+                        poolBalancesState.bnb === 0 &&
+                        poolBalancesState.mwg === 0 && (
+                          <div className="mb-3 p-3 bg-yellow-100 border border-yellow-300 rounded">
+                            <p className="text-sm text-yellow-900 font-medium">
+                              ⚠️ Pool is empty but has an initialized price
+                            </p>
+                            <p className="text-xs text-yellow-800 mt-1">
+                              Someone created this pool previously. The price
+                              below is the last known price. You can provide
+                              liquidity around this price, or choose a different
+                              price range.
+                            </p>
+                          </div>
+                        )}
 
-                            // Calculate sqrtPriceX96 for target price
-                            const bnbPerMWG =
-                              parseFloat(targetPriceUSD) /
-                              parseFloat(bnbPriceUSD);
-                            const priceT1perT0 = token0IsMWG
-                              ? bnbPerMWG
-                              : 1 / bnbPerMWG;
-                            const sqrtPrice = Math.sqrt(priceT1perT0);
-                            const Q96 = BigInt(2) ** BigInt(96);
-                            const sqrtPriceX96 = BigInt(
-                              Math.floor(sqrtPrice * Number(Q96))
-                            );
-
-                            console.log(
-                              "🏊 Creating new pool with correct price:",
-                              {
-                                feeTier: 500,
-                                targetPriceUSD: targetPriceUSD,
-                                bnbPerMWG,
-                                sqrtPriceX96: sqrtPriceX96.toString(),
+                      {/* Critical warning if pool price seems inverted */}
+                      {poolPrice && poolPrice.mwgUsd > 1000000 && (
+                        <div className="mb-3 p-3 bg-red-100 border-2 border-red-500 rounded">
+                          <p className="text-sm text-red-900 font-bold">
+                            🚨 CRITICAL: Pool Initialized with Inverted Price!
+                          </p>
+                          <p className="text-xs text-red-800 mt-1">
+                            The current pool price is{" "}
+                            <strong>
+                              ${formatNumber(poolPrice.mwgUsd, 0)}
+                            </strong>{" "}
+                            per MWG token. This is likely backwards. The pool
+                            was probably initialized with the inverse of the
+                            intended price.
+                          </p>
+                          <p className="text-xs text-red-800 mt-2 font-medium">
+                            ⚠️ This pool is effectively unusable at this price.
+                            You should either:
+                          </p>
+                          <ul className="text-xs text-red-800 mt-1 ml-4 list-disc">
+                            <li>
+                              Deploy a new pool with the correct initial price
+                              (click button below)
+                            </li>
+                            <li>
+                              Or if this price is correct, your target price of
+                              ${targetPriceUSD} is incompatible
+                            </li>
+                          </ul>
+                          <button
+                            onClick={async () => {
+                              if (
+                                !confirm(
+                                  `Create a NEW pool with 0.05% fee tier at $${targetPriceUSD} per MWG?\n\nThis will NOT fix the existing 0.25% fee pool. You'll need to update the fee tier in your UI to 500 (0.05%) after creation.`
+                                )
+                              ) {
+                                return;
                               }
-                            );
 
-                            const poolAddress = await createPool(
-                              token0 as Address,
-                              token0IsMWG
-                                ? getWBNBAddress(chain?.id)
-                                : (CONTRACT_ADDRESSES.TOKEN as Address),
-                              500, // 0.05% fee tier
-                              sqrtPriceX96
-                            );
+                              try {
+                                const { token0 } = getTokenOrder(
+                                  CONTRACT_ADDRESSES.TOKEN,
+                                  getWBNBAddress(chain?.id)
+                                );
+                                const token0IsMWG =
+                                  token0.toLowerCase() ===
+                                  CONTRACT_ADDRESSES.TOKEN.toLowerCase();
 
-                            alert(
-                              `✅ Pool created successfully at ${poolAddress}!\n\nNOTE: This is a 0.05% fee pool. Update the fee tier to 500 in your UI to use it.`
-                            );
-                            window.location.reload();
-                          } catch (err) {
-                            console.error("Failed to create pool:", err);
-                            alert(
-                              `Failed to create pool: ${
-                                err instanceof Error
-                                  ? err.message
-                                  : "Unknown error"
-                              }`
-                            );
-                          }
-                        }}
-                        className="mt-3 w-full px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors"
-                      >
-                        🏊 Create New Pool with Correct Price (0.05% fee)
-                      </button>
+                                // Calculate sqrtPriceX96 for target price
+                                const bnbPerMWG =
+                                  parseFloat(targetPriceUSD) /
+                                  parseFloat(bnbPriceUSD);
+                                const priceT1perT0 = token0IsMWG
+                                  ? bnbPerMWG
+                                  : 1 / bnbPerMWG;
+                                const sqrtPrice = Math.sqrt(priceT1perT0);
+                                const Q96 = BigInt(2) ** BigInt(96);
+                                const sqrtPriceX96 = BigInt(
+                                  Math.floor(sqrtPrice * Number(Q96))
+                                );
+
+                                console.log(
+                                  "🏊 Creating new pool with correct price:",
+                                  {
+                                    feeTier: 500,
+                                    targetPriceUSD: targetPriceUSD,
+                                    bnbPerMWG,
+                                    sqrtPriceX96: sqrtPriceX96.toString(),
+                                  }
+                                );
+
+                                const poolAddress = await createPool(
+                                  token0 as Address,
+                                  token0IsMWG
+                                    ? getWBNBAddress(chain?.id)
+                                    : (CONTRACT_ADDRESSES.TOKEN as Address),
+                                  500, // 0.05% fee tier
+                                  sqrtPriceX96
+                                );
+
+                                alert(
+                                  `✅ Pool created successfully at ${poolAddress}!\n\nNOTE: This is a 0.05% fee pool. Update the fee tier to 500 in your UI to use it.`
+                                );
+                                window.location.reload();
+                              } catch (err) {
+                                console.error("Failed to create pool:", err);
+                                alert(
+                                  `Failed to create pool: ${
+                                    err instanceof Error
+                                      ? err.message
+                                      : "Unknown error"
+                                  }`
+                                );
+                              }
+                            }}
+                            className="mt-3 w-full px-4 py-2 bg-green-600 text-white text-sm font-medium rounded hover:bg-green-700 transition-colors"
+                          >
+                            🏊 Create New Pool with Correct Price (0.05% fee)
+                          </button>
+                        </div>
+                      )}
+
+                      {/* Warning when price range is incompatible with pool */}
+                      {!rangeCompatible && poolPrice && (
+                        <div className="mb-3 p-3 bg-orange-100 border-2 border-orange-500 rounded">
+                          <p className="text-sm text-orange-900 font-bold">
+                            ⚠️ Price Range Incompatible with Current Pool!
+                          </p>
+                          <p className="text-xs text-orange-800 mt-1">
+                            Your target price (${targetPriceUSD}) creates a tick
+                            range that doesn&apos;t include the current pool
+                            tick ({poolTick}). This means liquidity addition
+                            will likely fail or only use one token type.
+                          </p>
+                          <p className="text-xs text-orange-800 mt-2 font-medium">
+                            ✅ Solution: Click the blue &quot;Use Current Pool
+                            Price as Target&quot; button below, then click
+                            &quot;Calculate&quot; again.
+                          </p>
+                          <p className="text-xs text-orange-700 mt-1">
+                            Current pool price:{" "}
+                            <strong>${poolPrice.mwgUsd.toFixed(6)}</strong> per
+                            MWG
+                          </p>
+                        </div>
+                      )}
+
+                      {poolBalancesState && (
+                        <div className="grid grid-cols-2 gap-4 text-sm mb-3">
+                          <div>
+                            <p className="text-gray-600">Pool BNB</p>
+                            <p className="font-semibold">
+                              {formatNumber(poolBalancesState.bnb, 6)} BNB
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">Pool MWG</p>
+                            <p className="font-semibold">
+                              {formatNumber(poolBalancesState.mwg, 0)} MWG
+                            </p>
+                          </div>
+                        </div>
+                      )}
+                      {poolPrice && (
+                        <div className="grid grid-cols-3 gap-4 text-sm mb-3">
+                          <div>
+                            <p className="text-gray-600">1 MWG =</p>
+                            <p className="font-semibold">
+                              {formatNumber(poolPrice.bnbPerMWG, 10)} BNB
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">1 BNB =</p>
+                            <p className="font-semibold">
+                              {formatNumber(poolPrice.mwgPerBNB, 2)} MWG
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-gray-600">1 MWG ≈</p>
+                            <p className="font-semibold">
+                              ${formatNumber(poolPrice.mwgUsd, 6)} USD
+                            </p>
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Button to use current pool price */}
+                      {poolPrice &&
+                        poolTick !== null &&
+                        poolPrice.mwgUsd !== parseFloat(targetPriceUSD) && (
+                          <button
+                            onClick={() => {
+                              const newPrice = poolPrice.mwgUsd.toFixed(6);
+                              setTargetPriceUSD(newPrice);
+
+                              // Instead of using percentage range, directly calculate ticks from pool tick
+                              // Create a range of ±10000 ticks around current pool tick
+                              const tickSpacing =
+                                selectedFeeTier === 500 ? 10 : 50; // 0.05% = 10, 0.25% = 50
+                              const tickRange = 10000;
+
+                              // Round to valid tick spacing
+                              const currentTickRounded =
+                                Math.floor(poolTick / tickSpacing) *
+                                tickSpacing;
+                              const newTickLower =
+                                currentTickRounded - tickRange;
+                              const newTickUpper =
+                                currentTickRounded + tickRange;
+
+                              console.log(
+                                "🎯 Creating range directly from pool tick:",
+                                {
+                                  poolTick,
+                                  currentTickRounded,
+                                  tickLower: newTickLower,
+                                  tickUpper: newTickUpper,
+                                  tickSpacing,
+                                }
+                              );
+
+                              // Manually set the calculated amounts with correct ticks
+                              setCalculated({
+                                ...calculated!,
+                                tickLower: newTickLower,
+                                tickUpper: newTickUpper,
+                              });
+
+                              // Also update range to reflect this
+                              // Approximate percentage based on ticks (not exact but close enough for display)
+                              setPriceRangePercent(50);
+
+                              alert(
+                                `✅ Range updated to center around pool tick ${poolTick}!\nTick range: ${newTickLower} to ${newTickUpper}\n\nClick "Add Liquidity" to proceed.`
+                              );
+                            }}
+                            className="mb-3 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
+                          >
+                            🎯 Fix Range to Center on Pool Tick
+                          </button>
+                        )}
+                      {usagePreview?.oneSided ? (
+                        <p className="text-amber-800 mb-2">
+                          ⚠️ One-sided deposit expected: primarily{" "}
+                          {usagePreview.oneSided} will be used in this range.
+                        </p>
+                      ) : (
+                        <p className="text-amber-800 mb-2">
+                          Balanced usage expected within your tick range.
+                        </p>
+                      )}
+                      <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div>
+                          <p className="text-gray-600">
+                            Expected to spend now (BNB)
+                          </p>
+                          <p className="font-semibold">
+                            {formatNumber(usagePreview?.usedBNB || 0, 6)} BNB
+                          </p>
+                        </div>
+                        <div>
+                          <p className="text-gray-600">
+                            Expected to spend now (MWG)
+                          </p>
+                          <p className="font-semibold">
+                            {formatNumber(usagePreview?.usedMWG || 0, 0)} MWG
+                          </p>
+                        </div>
+                      </div>
+                      <p className="text-xs text-gray-600 mt-2">
+                        Any unspent tokens remain in your wallet. Minimums will
+                        adapt to pool price to avoid reverts.
+                      </p>
                     </div>
                   )}
 
-                  {/* Warning when price range is incompatible with pool */}
-                  {!rangeCompatible && poolPrice && (
-                    <div className="mb-3 p-3 bg-orange-100 border-2 border-orange-500 rounded">
-                      <p className="text-sm text-orange-900 font-bold">
-                        ⚠️ Price Range Incompatible with Current Pool!
-                      </p>
-                      <p className="text-xs text-orange-800 mt-1">
-                        Your target price (${targetPriceUSD}) creates a tick
-                        range that doesn&apos;t include the current pool tick (
-                        {poolTick}). This means liquidity addition will likely
-                        fail or only use one token type.
-                      </p>
-                      <p className="text-xs text-orange-800 mt-2 font-medium">
-                        ✅ Solution: Click the blue &quot;Use Current Pool Price
-                        as Target&quot; button below, then click
-                        &quot;Calculate&quot; again.
-                      </p>
-                      <p className="text-xs text-orange-700 mt-1">
-                        Current pool price:{" "}
-                        <strong>${poolPrice.mwgUsd.toFixed(6)}</strong> per MWG
-                      </p>
-                    </div>
-                  )}
-
-                  {poolBalancesState && (
-                    <div className="grid grid-cols-2 gap-4 text-sm mb-3">
-                      <div>
-                        <p className="text-gray-600">Pool BNB</p>
-                        <p className="font-semibold">
-                          {formatNumber(poolBalancesState.bnb, 6)} BNB
-                        </p>
+                  {/* Price Info */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-900 mb-2">
+                      Price Information
+                    </h3>
+                    <div className="space-y-2 text-sm">
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Target Price:</span>
+                        <span className="font-medium">
+                          1 MWG = ${parseFloat(targetPriceUSD).toFixed(6)} USD
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-gray-600">Pool MWG</p>
-                        <p className="font-semibold">
-                          {formatNumber(poolBalancesState.mwg, 0)} MWG
-                        </p>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Lower Range:</span>
+                        <span className="font-medium">
+                          $
+                          {(
+                            calculated.lowerPrice * parseFloat(bnbPriceUSD)
+                          ).toFixed(6)}{" "}
+                          USD
+                        </span>
                       </div>
-                    </div>
-                  )}
-                  {poolPrice && (
-                    <div className="grid grid-cols-3 gap-4 text-sm mb-3">
-                      <div>
-                        <p className="text-gray-600">1 MWG =</p>
-                        <p className="font-semibold">
-                          {formatNumber(poolPrice.bnbPerMWG, 10)} BNB
-                        </p>
+                      <div className="flex justify-between">
+                        <span className="text-gray-600">Upper Range:</span>
+                        <span className="font-medium">
+                          $
+                          {(
+                            calculated.upperPrice * parseFloat(bnbPriceUSD)
+                          ).toFixed(6)}{" "}
+                          USD
+                        </span>
                       </div>
-                      <div>
-                        <p className="text-gray-600">1 BNB =</p>
-                        <p className="font-semibold">
-                          {formatNumber(poolPrice.mwgPerBNB, 2)} MWG
-                        </p>
-                      </div>
-                      <div>
-                        <p className="text-gray-600">1 MWG ≈</p>
-                        <p className="font-semibold">
-                          ${formatNumber(poolPrice.mwgUsd, 6)} USD
-                        </p>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Button to use current pool price */}
-                  {poolPrice &&
-                    poolTick !== null &&
-                    poolPrice.mwgUsd !== parseFloat(targetPriceUSD) && (
-                      <button
-                        onClick={() => {
-                          const newPrice = poolPrice.mwgUsd.toFixed(6);
-                          setTargetPriceUSD(newPrice);
-
-                          // Instead of using percentage range, directly calculate ticks from pool tick
-                          // Create a range of ±10000 ticks around current pool tick
-                          const tickSpacing = selectedFeeTier === 500 ? 10 : 50; // 0.05% = 10, 0.25% = 50
-                          const tickRange = 10000;
-
-                          // Round to valid tick spacing
-                          const currentTickRounded =
-                            Math.floor(poolTick / tickSpacing) * tickSpacing;
-                          const newTickLower = currentTickRounded - tickRange;
-                          const newTickUpper = currentTickRounded + tickRange;
-
-                          console.log(
-                            "🎯 Creating range directly from pool tick:",
-                            {
-                              poolTick,
-                              currentTickRounded,
-                              tickLower: newTickLower,
-                              tickUpper: newTickUpper,
-                              tickSpacing,
-                            }
-                          );
-
-                          // Manually set the calculated amounts with correct ticks
-                          setCalculated({
-                            ...calculated!,
-                            tickLower: newTickLower,
-                            tickUpper: newTickUpper,
-                          });
-
-                          // Also update range to reflect this
-                          // Approximate percentage based on ticks (not exact but close enough for display)
-                          setPriceRangePercent(50);
-
-                          alert(
-                            `✅ Range updated to center around pool tick ${poolTick}!\nTick range: ${newTickLower} to ${newTickUpper}\n\nClick "Add Liquidity" to proceed.`
-                          );
-                        }}
-                        className="mb-3 px-4 py-2 bg-blue-500 text-white text-sm font-medium rounded hover:bg-blue-600 transition-colors"
-                      >
-                        🎯 Fix Range to Center on Pool Tick
-                      </button>
-                    )}
-                  {usagePreview?.oneSided ? (
-                    <p className="text-amber-800 mb-2">
-                      ⚠️ One-sided deposit expected: primarily{" "}
-                      {usagePreview.oneSided} will be used in this range.
-                    </p>
-                  ) : (
-                    <p className="text-amber-800 mb-2">
-                      Balanced usage expected within your tick range.
-                    </p>
-                  )}
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <p className="text-gray-600">
-                        Expected to spend now (BNB)
-                      </p>
-                      <p className="font-semibold">
-                        {formatNumber(usagePreview?.usedBNB || 0, 6)} BNB
-                      </p>
-                    </div>
-                    <div>
-                      <p className="text-gray-600">
-                        Expected to spend now (MWG)
-                      </p>
-                      <p className="font-semibold">
-                        {formatNumber(usagePreview?.usedMWG || 0, 0)} MWG
-                      </p>
                     </div>
                   </div>
-                  <p className="text-xs text-gray-600 mt-2">
-                    Any unspent tokens remain in your wallet. Minimums will
-                    adapt to pool price to avoid reverts.
-                  </p>
-                </div>
-              )}
 
-              {/* Price Info */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-900 mb-2">
-                  Price Information
-                </h3>
-                <div className="space-y-2 text-sm">
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Target Price:</span>
-                    <span className="font-medium">
-                      1 MWG = ${parseFloat(targetPriceUSD).toFixed(6)} USD
-                    </span>
+                  {/* Technical Details */}
+                  <div className="bg-gray-50 p-4 rounded-lg">
+                    <h3 className="font-semibold text-gray-900 mb-2">
+                      Technical Details
+                    </h3>
+                    <div className="space-y-1 text-sm text-gray-600">
+                      <div className="flex justify-between">
+                        <span>Fee Tier:</span>
+                        <span className="font-mono">
+                          {(calculated.feeTier / 10000).toFixed(2)}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Tick Range:</span>
+                        <span className="font-mono">
+                          [{calculated.tickLower}, {calculated.tickUpper}]
+                        </span>
+                      </div>
+                      <div className="flex justify-between">
+                        <span>Current Tick:</span>
+                        <span className="font-mono">
+                          {calculated.currentTick}
+                        </span>
+                      </div>
+                    </div>
                   </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Lower Range:</span>
-                    <span className="font-medium">
-                      $
-                      {(
-                        calculated.lowerPrice * parseFloat(bnbPriceUSD)
-                      ).toFixed(6)}{" "}
-                      USD
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span className="text-gray-600">Upper Range:</span>
-                    <span className="font-medium">
-                      $
-                      {(
-                        calculated.upperPrice * parseFloat(bnbPriceUSD)
-                      ).toFixed(6)}{" "}
-                      USD
-                    </span>
-                  </div>
+
+                  {/* Pool Status */}
+                  {isCheckingPool ? (
+                    <div className="text-center py-4">
+                      <p className="text-gray-600">Checking pool status...</p>
+                    </div>
+                  ) : poolExists === true ? (
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                      <p className="text-green-800">
+                        ✅ Pool exists! You can add liquidity directly.
+                      </p>
+                    </div>
+                  ) : poolExists === false ? (
+                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
+                      <p className="text-yellow-800">
+                        ⚠️ Pool doesn&apos;t exist yet. It will be created when
+                        you add liquidity.
+                      </p>
+                    </div>
+                  ) : null}
+
+                  {/* Add Liquidity Button */}
+                  <button
+                    onClick={handleAddLiquidity}
+                    disabled={
+                      !isConnected || isLoading || txStatus === "adding"
+                    }
+                    className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold transition-colors text-lg"
+                  >
+                    {txStatus === "adding"
+                      ? "⏳ Adding Liquidity..."
+                      : !isConnected
+                      ? "🔌 Connect Wallet First"
+                      : "💧 Add Liquidity"}
+                  </button>
                 </div>
               </div>
-
-              {/* Technical Details */}
-              <div className="bg-gray-50 p-4 rounded-lg">
-                <h3 className="font-semibold text-gray-900 mb-2">
-                  Technical Details
-                </h3>
-                <div className="space-y-1 text-sm text-gray-600">
-                  <div className="flex justify-between">
-                    <span>Fee Tier:</span>
-                    <span className="font-mono">
-                      {(calculated.feeTier / 10000).toFixed(2)}%
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Tick Range:</span>
-                    <span className="font-mono">
-                      [{calculated.tickLower}, {calculated.tickUpper}]
-                    </span>
-                  </div>
-                  <div className="flex justify-between">
-                    <span>Current Tick:</span>
-                    <span className="font-mono">{calculated.currentTick}</span>
-                  </div>
-                </div>
-              </div>
-
-              {/* Pool Status */}
-              {isCheckingPool ? (
-                <div className="text-center py-4">
-                  <p className="text-gray-600">Checking pool status...</p>
-                </div>
-              ) : poolExists === true ? (
-                <div className="bg-green-50 border border-green-200 rounded-lg p-4">
-                  <p className="text-green-800">
-                    ✅ Pool exists! You can add liquidity directly.
-                  </p>
-                </div>
-              ) : poolExists === false ? (
-                <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                  <p className="text-yellow-800">
-                    ⚠️ Pool doesn&apos;t exist yet. It will be created when you
-                    add liquidity.
-                  </p>
-                </div>
-              ) : null}
-
-              {/* Add Liquidity Button */}
-              <button
-                onClick={handleAddLiquidity}
-                disabled={!isConnected || isLoading || txStatus === "adding"}
-                className="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed font-semibold transition-colors text-lg"
-              >
-                {txStatus === "adding"
-                  ? "⏳ Adding Liquidity..."
-                  : !isConnected
-                  ? "🔌 Connect Wallet First"
-                  : "💧 Add Liquidity"}
-              </button>
-            </div>
-          </div>
-          )}
+            )}
           </>
         )}
       </div>

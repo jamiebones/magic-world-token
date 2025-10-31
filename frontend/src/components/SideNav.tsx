@@ -29,16 +29,8 @@ export function SideNav() {
   });
 
   const isActive = (path: string) => {
-    // Exact match for home
-    if (path === "/") {
-      return pathname === "/";
-    }
-    // Exact match for admin dashboard (don't match child routes)
-    if (path === "/admin") {
-      return pathname === "/admin";
-    }
-    // For all other paths, match exactly or child routes
-    return pathname === path || pathname.startsWith(path + "/");
+    // Exact match only - no parent highlighting when on child routes
+    return pathname === path;
   };
 
   // DRY: Define navigation structure once
