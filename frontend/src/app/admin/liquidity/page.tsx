@@ -1,12 +1,14 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useAccount } from "wagmi";
 import { type Address } from "viem";
+import toast from "react-hot-toast";
 import {
   CONTRACT_ADDRESSES,
   FEE_TIERS,
   getWBNBAddress,
+  PANCAKESWAP_V3,
 } from "@/config/contracts";
 import { usePancakeSwapV3 } from "@/hooks/usePancakeSwapV3";
 import {
@@ -16,6 +18,7 @@ import {
   calculateMintMinFromPoolState,
   estimateUsageFromPoolState,
 } from "@/utils/liquidityCalculations";
+import { fetchBnbPriceWithRetry } from "@/utils/fetchBnbPrice";
 import type { CalculatedAmounts, FeeTier } from "@/types/liquidity";
 
 export default function AddLiquidityPage() {
@@ -34,11 +37,31 @@ export default function AddLiquidityPage() {
   const [targetPriceUSD, setTargetPriceUSD] = useState("0.0003");
   const [totalLiquidityUSD, setTotalLiquidityUSD] = useState("1000");
   const [bnbPriceUSD, setBnbPriceUSD] = useState("600");
+  const [isFetchingBnbPrice, setIsFetchingBnbPrice] = useState(false);
   const [selectedFeeTier, setSelectedFeeTier] = useState<FeeTier>(
     FEE_TIERS.MEDIUM
   );
   const [priceRangePercent, setPriceRangePercent] = useState(50);
-  const [slippageTolerance, setSlippageTolerance] = useState(1);
+  const [slippageTolerance, setSlippageTolerance] = useState(0.5);
+
+  // Fetch BNB price on component mount
+  useEffect(() => {
+    const fetchPrice = async () => {
+      setIsFetchingBnbPrice(true);
+      try {
+        const price = await fetchBnbPriceWithRetry();
+        setBnbPriceUSD(price.toString());
+        toast.success(`BNB price updated: $${price.toFixed(2)}`);
+      } catch (error) {
+        console.error("Failed to fetch BNB price:", error);
+        toast.error("Failed to fetch BNB price, using default $600");
+      } finally {
+        setIsFetchingBnbPrice(false);
+      }
+    };
+
+    fetchPrice();
+  }, []);
 
   // Calculated values
   const [calculated, setCalculated] = useState<CalculatedAmounts | null>(null);
@@ -87,10 +110,15 @@ export default function AddLiquidityPage() {
         getWBNBAddress(chain?.id)
       );
       setCalculated(result);
+      toast.success("✅ Calculation completed successfully!");
       checkIfPoolExists(result);
     } catch (err) {
       console.error("Calculation error:", err);
-      alert("Failed to calculate amounts. Please check your inputs.");
+      toast.error(
+        `Calculation failed: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
     } finally {
       setIsCalculating(false);
     }
@@ -258,6 +286,11 @@ export default function AddLiquidityPage() {
       }
     } catch (err) {
       console.error("Error checking pool:", err);
+      toast.error(
+        `Failed to check pool: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
       setPoolExists(null);
       // setPoolAddress(null);
       setPoolSqrtPriceX96(null);
@@ -402,11 +435,20 @@ export default function AddLiquidityPage() {
       if (tokenId) {
         setPositionId(tokenId);
         setTxStatus("success");
+        toast.success(
+          `🎉 Liquidity added successfully! Position NFT ID: ${tokenId.toString()}`
+        );
       } else {
         setTxStatus("error");
+        toast.error("Failed to add liquidity - no position ID returned");
       }
     } catch (err) {
       console.error("Error adding liquidity:", err);
+      toast.error(
+        `Failed to add liquidity: ${
+          err instanceof Error ? err.message : String(err)
+        }`
+      );
       setTxStatus("error");
     }
   };
@@ -557,17 +599,87 @@ export default function AddLiquidityPage() {
 
                   {/* BNB Price */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-300 mb-2">
-                      Current BNB Price (USD)
+                    <label className="flex items-center justify-between text-sm font-medium text-gray-300 mb-2">
+                      <span>Current BNB Price (USD)</span>
+                      <button
+                        onClick={async () => {
+                          setIsFetchingBnbPrice(true);
+                          try {
+                            const price = await fetchBnbPriceWithRetry();
+                            setBnbPriceUSD(price.toString());
+                            toast.success(
+                              `BNB price updated: $${price.toFixed(2)}`
+                            );
+                          } catch (error) {
+                            console.error(
+                              "Failed to refresh BNB price:",
+                              error
+                            );
+                            toast.error("Failed to refresh BNB price");
+                          } finally {
+                            setIsFetchingBnbPrice(false);
+                          }
+                        }}
+                        disabled={isFetchingBnbPrice}
+                        className="text-xs text-purple-400 hover:text-purple-300 disabled:text-gray-500 flex items-center gap-1"
+                        title="Refresh BNB price"
+                      >
+                        <svg
+                          className={`w-3 h-3 ${
+                            isFetchingBnbPrice ? "animate-spin" : ""
+                          }`}
+                          fill="none"
+                          viewBox="0 0 24 24"
+                          stroke="currentColor"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            strokeWidth={2}
+                            d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                          />
+                        </svg>
+                        {isFetchingBnbPrice ? "Fetching..." : "Refresh"}
+                      </button>
                     </label>
-                    <input
-                      type="number"
-                      step="1"
-                      value={bnbPriceUSD}
-                      onChange={(e) => setBnbPriceUSD(e.target.value)}
-                      className="w-full px-4 py-3 bg-gray-900/50 border-2 border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500"
-                      placeholder="600"
-                    />
+                    <div className="relative">
+                      <input
+                        type="number"
+                        step="1"
+                        value={bnbPriceUSD}
+                        onChange={(e) => setBnbPriceUSD(e.target.value)}
+                        disabled={isFetchingBnbPrice}
+                        className="w-full px-4 py-3 bg-gray-900/50 border-2 border-gray-600 text-white rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 disabled:opacity-50 disabled:cursor-not-allowed"
+                        placeholder="600"
+                      />
+                      {isFetchingBnbPrice && (
+                        <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                          <svg
+                            className="animate-spin h-5 w-5 text-purple-400"
+                            xmlns="http://www.w3.org/2000/svg"
+                            fill="none"
+                            viewBox="0 0 24 24"
+                          >
+                            <circle
+                              className="opacity-25"
+                              cx="12"
+                              cy="12"
+                              r="10"
+                              stroke="currentColor"
+                              strokeWidth="4"
+                            ></circle>
+                            <path
+                              className="opacity-75"
+                              fill="currentColor"
+                              d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                            ></path>
+                          </svg>
+                        </div>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-400 mt-1">
+                      Auto-fetched from CoinGecko • Updated every minute
+                    </p>
                   </div>
                 </div>
 
@@ -608,7 +720,7 @@ export default function AddLiquidityPage() {
                   <input
                     type="range"
                     min="10"
-                    max="100"
+                    max="150"
                     step="5"
                     value={priceRangePercent}
                     onChange={(e) =>
@@ -621,7 +733,7 @@ export default function AddLiquidityPage() {
                     <span className="font-medium text-purple-400">
                       ±{priceRangePercent}%
                     </span>
-                    <span>±100% Wide</span>
+                    <span>±150% Wide</span>
                   </div>
                   <p className="text-sm text-gray-400 mt-2">
                     Narrower ranges earn more fees but need rebalancing more
@@ -693,6 +805,189 @@ export default function AddLiquidityPage() {
               </button>
             </div>
 
+            {/* Contracts in Use */}
+            <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6 border border-purple-500/20">
+              <h3 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+                <svg
+                  className="w-5 h-5 text-purple-400"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"
+                  />
+                </svg>
+                Contracts in Use
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {/* MWG Token */}
+                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-purple-400">
+                      MWG Token
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(CONTRACT_ADDRESSES.TOKEN);
+                        toast.success("📋 MWG Token address copied!");
+                      }}
+                      className="text-gray-400 hover:text-purple-400 transition-colors"
+                      title="Copy address"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <a
+                    href={`https://bscscan.com/address/${CONTRACT_ADDRESSES.TOKEN}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-gray-300 hover:text-purple-400 break-all transition-colors"
+                  >
+                    {CONTRACT_ADDRESSES.TOKEN}
+                  </a>
+                </div>
+
+                {/* WBNB */}
+                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-purple-400">
+                      WBNB
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          getWBNBAddress(chain?.id)
+                        );
+                        toast.success("📋 WBNB address copied!");
+                      }}
+                      className="text-gray-400 hover:text-purple-400 transition-colors"
+                      title="Copy address"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <a
+                    href={`https://bscscan.com/address/${getWBNBAddress(
+                      chain?.id
+                    )}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-gray-300 hover:text-purple-400 break-all transition-colors"
+                  >
+                    {getWBNBAddress(chain?.id)}
+                  </a>
+                </div>
+
+                {/* Position Manager */}
+                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-purple-400">
+                      Position Manager
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(
+                          PANCAKESWAP_V3.POSITION_MANAGER
+                        );
+                        toast.success("📋 Position Manager address copied!");
+                      }}
+                      className="text-gray-400 hover:text-purple-400 transition-colors"
+                      title="Copy address"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <a
+                    href={`https://bscscan.com/address/${PANCAKESWAP_V3.POSITION_MANAGER}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-gray-300 hover:text-purple-400 break-all transition-colors"
+                  >
+                    {PANCAKESWAP_V3.POSITION_MANAGER}
+                  </a>
+                </div>
+
+                {/* Router */}
+                <div className="bg-gray-900/50 rounded-lg p-4 border border-gray-700">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-sm font-medium text-purple-400">
+                      Router
+                    </span>
+                    <button
+                      onClick={() => {
+                        navigator.clipboard.writeText(PANCAKESWAP_V3.ROUTER);
+                        toast.success("📋 Router address copied!");
+                      }}
+                      className="text-gray-400 hover:text-purple-400 transition-colors"
+                      title="Copy address"
+                    >
+                      <svg
+                        className="w-4 h-4"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                      >
+                        <path
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                          strokeWidth={2}
+                          d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                        />
+                      </svg>
+                    </button>
+                  </div>
+                  <a
+                    href={`https://bscscan.com/address/${PANCAKESWAP_V3.ROUTER}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs font-mono text-gray-300 hover:text-purple-400 break-all transition-colors"
+                  >
+                    {PANCAKESWAP_V3.ROUTER}
+                  </a>
+                </div>
+              </div>
+            </div>
+
             {/* Calculation Results */}
             {calculated && (
               <div className="bg-gray-800/50 backdrop-blur-sm rounded-xl shadow-lg p-6 mb-6 border border-purple-500/20">
@@ -733,6 +1028,26 @@ export default function AddLiquidityPage() {
                           )}
                         </p>
                       </div>
+                    </div>
+                  </div>
+
+                  {/* Exchange Rate */}
+                  <div className="bg-gray-900/50 p-4 rounded-lg border border-gray-700">
+                    <h3 className="font-semibold text-gray-300 mb-2">
+                      Exchange Rate at Target Price
+                    </h3>
+                    <div className="text-center">
+                      <p className="text-sm text-gray-400">1 BNB ≈</p>
+                      <p className="text-2xl font-bold text-purple-400">
+                        {formatNumber(
+                          parseFloat(bnbPriceUSD) / parseFloat(targetPriceUSD),
+                          0
+                        )}{" "}
+                        MWG
+                      </p>
+                      <p className="text-xs text-gray-500 mt-1">
+                        Based on target price of ${targetPriceUSD} per MWG
+                      </p>
                     </div>
                   </div>
 
