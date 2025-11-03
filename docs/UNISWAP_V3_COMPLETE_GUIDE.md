@@ -331,7 +331,7 @@ When you deposited **0.3 BNB + 1,583,136 MWT**, V3 calculated the required liqui
 // Given deposit amounts and price range
 const amount0 = 1583136; // MWT
 const amount1 = 0.3;     // BNB
-const P = 3.115e-7;      // Current price (WBNB/MWT)
+const P = 3.115e-7;      // Current ppol price (WBNB/MWT)
 const P_lower = 2.094e-7;
 const P_upper = 6.289e-7;
 
