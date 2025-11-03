@@ -44,7 +44,7 @@ function unstakePosition(uint256 tokenId) external nonReentrant {
     // Delete position before external calls
     delete stakedPositions[tokenId];
 
-    // ==================== INTERACTIONS: External calls last ====================
+    //==================== INTERACTIONS: External calls last ====================
 
     // Transfer NFT back to user
     IERC721(positionManager).safeTransferFrom(
@@ -277,7 +277,7 @@ For each token ID in the array:
   - Can't claim rewards for someone else's positions
 
 - **Line 436:** Calculate pending rewards
-  - Includes liquidity validation (security fix)
+  - Includes liquidity validation 
   - Returns 0 if liquidity was removed
 
 - **Line 437:** If has rewards (> 0)

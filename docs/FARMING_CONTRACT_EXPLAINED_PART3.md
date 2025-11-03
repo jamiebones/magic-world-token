@@ -55,15 +55,36 @@ function _validatePositionLiquidity(
 
 **Explanation:**
 
-**Purpose:** 🔒 **CRITICAL SECURITY FIX** - Detect if user removed liquidity from staked position
+Detect if staked position's liquidity has changed
 
-**The Vulnerability This Fixes:**
+**Important Clarification:**
 
-Without this check, users could:
-1. Stake position with 100 BNB liquidity → Lock in high USD value
-2. Call Uniswap's `decreaseLiquidity()` → Remove all liquidity
-3. Continue earning rewards based on original 100 BNB
-4. Drain reward pool while providing zero liquidity!
+Once the NFT is transferred to the contract during staking:
+- **User no longer owns the NFT**
+- **User CANNOT call `decreaseLiquidity()` on the staked NFT**
+- Only the contract (as the NFT owner) could modify it
+
+**So Why This Check?**
+
+This is a **defensive programming measure** for several scenarios:
+
+1. **Before Staking Protection**: If user reduced liquidity before staking, contract reads actual liquidity at staking time (already handled correctly)
+
+2. **Contract Bug Protection**: If our contract had a bug that allowed liquidity removal while staked, this detects it
+
+3. **Uniswap V3 Future Changes**: If Uniswap V3 adds features allowing approved operators to modify positions, we're protected
+
+4. **Position Manager Bugs**: If there's a vulnerability in Uniswap's position manager, this provides a safety net
+
+5. **Accurate Accounting**: Ensures rewards always match the actual liquidity in the position
+
+**Theoretical Attack Scenario** (that this prevents):
+
+If somehow the staked NFT's liquidity could be decreased (through a bug or future feature):
+1. Position staked with 100 BNB liquidity → Contract stores original liquidity
+2. Through some vulnerability, liquidity gets reduced to 10 BNB
+3. Our validation detects: currentLiquidity (10) < storedLiquidity (100)
+4. Rewards scaled down to 10% → Attack prevented!
 
 **How It Works:**
 
@@ -91,13 +112,20 @@ This function is called by `_calculatePendingRewards()` on **every reward calcul
 
 ```solidity
 // User staked with liquidity = 1000 (stored in position.liquidity)
-// Later, user removes half via Uniswap
+// Contract owns the NFT now - user CANNOT modify it
+
+// Hypothetically, if liquidity somehow decreased to 500:
 // currentLiquidity = _validatePositionLiquidity(tokenId) → returns 500
 
 // Reward calculation:
 // liquidityRatio = 500 / 1000 = 0.5
 // rewards = baseRewards * 0.5
-// User gets 50% rewards because they only have 50% liquidity!
+// User gets 50% rewards (proportional to actual liquidity)
+
+// This is a defensive measure against:
+// - Contract bugs
+// - Position manager vulnerabilities  
+// - Future Uniswap V3 features
 ```
 
 ---
@@ -107,7 +135,6 @@ This function is called by `_calculatePendingRewards()` on **every reward calcul
 ```solidity
 /**
  * @dev Calculate pending rewards for a position
- * SECURITY FIX: Validates actual current liquidity to prevent removal exploit
  */
 function _calculatePendingRewards(
     StakedPosition memory position
@@ -148,11 +175,12 @@ uint128 currentLiquidity = _validatePositionLiquidity(position.tokenId);
 if (currentLiquidity == 0) return 0; // Position has been emptied!
 ```
 
-**This is the security fix!**
+**This is the defensive check!**
 
 - Fetches **current actual liquidity** from Uniswap
-- If user removed all liquidity → returns 0 rewards
-- If user removed some liquidity → rewards scaled down proportionally
+- Compares it with the original liquidity stored at staking time
+- If liquidity has decreased → rewards scaled down proportionally
+- **Note:** User CANNOT remove liquidity from staked NFT (they don't own it), but this protects against bugs or vulnerabilities
 
 #### Lines 678-683: Calculate Liquidity Ratio
 

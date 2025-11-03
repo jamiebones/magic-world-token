@@ -777,20 +777,6 @@ function emergencyWithdrawRewards(
    - Without this, `getAvailableRewards()` would return wrong value
 5. **Line 265:** Transfer MWG to admin
 
-**Why the security fix matters:**
-```solidity
-// OLD CODE (BUGGY):
-IERC20(mwgToken).safeTransfer(msg.sender, amount);
-// totalRewardsDeposited NOT updated!
-
-// Result: getAvailableRewards() returns inflated value
-// Users try to claim more than exists, transactions revert
-
-// NEW CODE (FIXED):
-totalRewardsDeposited -= amount; // Update accounting
-IERC20(mwgToken).safeTransfer(msg.sender, amount);
-// Now getAvailableRewards() returns correct value!
-```
 
 ### Lines 266-274: Pause/Unpause
 
@@ -959,7 +945,7 @@ We only need token addresses, fee tier, tick range, and liquidity.
   - Calls internal function `_calculatePositionValue()`
   - Takes token amounts, converts to BNB, converts to USD
   - Uses Chainlink oracle for BNB/USD price
-  - Uses TWAP for MWG/BNB price (security fix)
+  - Uses TWAP for MWG/BNB price
 
 - **Line 329:** Ensure position has value
 
@@ -1076,7 +1062,6 @@ Creates new `StakedPosition` struct in storage:
   - Uses `safeTransferFrom` for safety
   - Contract now holds the NFT
   - User cannot use NFT elsewhere while staked
-  - **This is why vulnerability #5 doesn't exist!**
 
 - **Lines 367-373:** Emit event for off-chain tracking
 
