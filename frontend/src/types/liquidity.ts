@@ -13,6 +13,10 @@ export interface LiquidityPosition {
   amount0?: bigint;
   amount1?: bigint;
   inRange?: boolean;
+  currentPrice?: number; // Current price in USD
+  minPrice?: number; // Min price of range in USD
+  maxPrice?: number; // Max price of range in USD
+  currentTick?: number; // Current pool tick
 }
 
 export interface PoolState {

@@ -1,7 +1,7 @@
 import { useState, useCallback } from 'react';
 import { useAccount, usePublicClient, useWalletClient } from 'wagmi';
 import { type Address, parseAbi } from 'viem';
-import { PANCAKESWAP_V3, getWBNBAddress } from '@/config/contracts';
+import { PANCAKESWAP_V3, getWBNBAddress, CONTRACT_ADDRESSES } from '@/config/contracts';
 import PancakeSwapV3ABI from '@/abis/PancakeSwapV3.json';
 import { LiquidityPosition, PoolState, AddLiquidityParams } from '@/types/liquidity';
 import { calculateMintMinFromPoolState, estimateUsageFromPoolState } from '@/utils/liquidityCalculations';
@@ -1013,20 +1013,90 @@ export function usePancakeSwapV3() {
             args: [tokenId],
           }) as [bigint, Address, Address, Address, number, number, number, bigint, bigint, bigint, bigint, bigint];
 
+          const token0 = positionData[2];
+          const token1 = positionData[3];
+          const fee = positionData[4];
+          const tickLower = positionData[5];
+          const tickUpper = positionData[6];
+
+          // Get pool address for this position
+          const poolAddress = await checkPoolExists(token0, token1, fee);
+          
+          // Determine if position is in range by checking current pool tick
+          // Also calculate current price and price range
+          let inRange = false;
+          let currentPrice: number | undefined;
+          let minPrice: number | undefined;
+          let maxPrice: number | undefined;
+          let currentTick: number | undefined;
+
+          if (poolAddress) {
+            try {
+              const poolState = await getPoolState(poolAddress);
+              if (poolState) {
+                currentTick = poolState.tick;
+                inRange = currentTick >= tickLower && currentTick <= tickUpper;
+                
+                // Calculate prices using tick values
+                // price = 1.0001^tick
+                const Q96 = BigInt(2) ** BigInt(96);
+                const sqrtPrice = Number(poolState.sqrtPriceX96) / Number(Q96);
+                const priceToken1PerToken0 = sqrtPrice * sqrtPrice;
+                
+                // Determine if token0 is MWG
+                const token0IsMWG = token0.toLowerCase() === CONTRACT_ADDRESSES.TOKEN.toLowerCase();
+                
+                // If token0 is MWG, then priceToken1PerToken0 = WBNB/MWG
+                const bnbPerMWG = token0IsMWG ? priceToken1PerToken0 : (priceToken1PerToken0 === 0 ? 0 : 1 / priceToken1PerToken0);
+                
+                // Assume BNB price ~$600 (could fetch from API for accuracy)
+                const BNB_PRICE_USD = 600;
+                currentPrice = bnbPerMWG * BNB_PRICE_USD;
+                
+                // Calculate min/max prices from tick range
+                const priceAtTickLower = Math.pow(1.0001, tickLower);
+                const priceAtTickUpper = Math.pow(1.0001, tickUpper);
+                
+                const bnbPerMWG_Lower = token0IsMWG ? priceAtTickLower : (priceAtTickLower === 0 ? 0 : 1 / priceAtTickLower);
+                const bnbPerMWG_Upper = token0IsMWG ? priceAtTickUpper : (priceAtTickUpper === 0 ? 0 : 1 / priceAtTickUpper);
+                
+                minPrice = bnbPerMWG_Lower * BNB_PRICE_USD;
+                maxPrice = bnbPerMWG_Upper * BNB_PRICE_USD;
+                
+                console.log(`📊 Position #${tokenId} - Current tick: ${currentTick}, Range: [${tickLower}, ${tickUpper}], In Range: ${inRange}`);
+                console.log(`💰 Prices - Current: $${currentPrice.toFixed(6)}, Min: $${minPrice.toFixed(6)}, Max: $${maxPrice.toFixed(6)}`);
+              }
+            } catch (err) {
+              console.warn(`⚠️ Could not check range for position #${tokenId}:`, err);
+              // If we can't fetch pool state, default to undefined
+              inRange = false;
+            }
+          }
+
           positions.push({
             tokenId,
-            token0: positionData[2],
-            token1: positionData[3],
-            fee: positionData[4],
-            tickLower: positionData[5],
-            tickUpper: positionData[6],
+            token0,
+            token1,
+            fee,
+            tickLower,
+            tickUpper,
             liquidity: positionData[7],
             feeGrowthInside0: positionData[8],
             feeGrowthInside1: positionData[9],
             tokensOwed0: positionData[10],
             tokensOwed1: positionData[11],
+            inRange,
+            currentPrice,
+            minPrice,
+            maxPrice,
+            currentTick,
           });
         }
+
+        console.log('✅ Loaded positions with range status:', positions.map(p => ({
+          tokenId: p.tokenId.toString(),
+          inRange: p.inRange,
+        })));
 
         return positions;
       } catch (err) {
@@ -1036,7 +1106,7 @@ export function usePancakeSwapV3() {
         setIsLoading(false);
       }
     },
-    [publicClient, address, chain?.id]
+    [publicClient, address, chain?.id, checkPoolExists, getPoolState]
   );
 
   /**

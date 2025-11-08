@@ -223,12 +223,54 @@ export default function LiquidityPositionsPage() {
                       </span>
                     </div>
 
+                    {/* Price Information */}
+                    {position.currentPrice &&
+                      position.minPrice &&
+                      position.maxPrice && (
+                        <div className="bg-purple-500/10 border border-purple-500/30 p-3 rounded-lg backdrop-blur-sm">
+                          <p className="text-sm font-semibold text-purple-400 mb-2">
+                            💵 Price Range
+                          </p>
+                          <div className="space-y-1 text-xs">
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Min Price:</span>
+                              <span className="font-mono text-gray-200">
+                                ${position.minPrice.toFixed(6)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-purple-400 font-semibold">
+                                Current Price:
+                              </span>
+                              <span className="font-mono text-purple-300 font-semibold">
+                                ${position.currentPrice.toFixed(6)}
+                              </span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-gray-400">Max Price:</span>
+                              <span className="font-mono text-gray-200">
+                                ${position.maxPrice.toFixed(6)}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Tick Range:</span>
                       <span className="font-mono text-xs text-gray-300">
                         [{position.tickLower}, {position.tickUpper}]
                       </span>
                     </div>
+
+                    {position.currentTick !== undefined && (
+                      <div className="flex justify-between text-sm">
+                        <span className="text-gray-400">Current Tick:</span>
+                        <span className="font-mono text-xs text-purple-300">
+                          {position.currentTick}
+                        </span>
+                      </div>
+                    )}
 
                     <div className="flex justify-between text-sm">
                       <span className="text-gray-400">Liquidity:</span>

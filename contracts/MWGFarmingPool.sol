@@ -127,6 +127,7 @@ contract MWGFarmingPool is
     event FarmingPeriodExtended(uint256 newEndTime);
     event EmergencyWithdrawEnabled();
     event PoolPriceUpdateFailed(uint256 timestamp);
+    event PoolInfoInitialized(uint160 sqrtPriceX96, int24 tick);
     event PositionValueCalculationFailed(
         uint256 indexed tokenId,
         uint256 fallbackValue
@@ -175,11 +176,19 @@ contract MWGFarmingPool is
         _grantRole(REWARD_MANAGER_ROLE, msg.sender);
         _grantRole(PAUSE_ROLE, msg.sender);
 
-        // Initialize pool info
-        _updatePoolInfo();
+        // Note: Pool info will be initialized after deployment via initializePoolInfo()
     }
 
     // ==================== ADMIN FUNCTIONS ====================
+
+    /**
+     * @dev Initialize pool info after deployment
+     * @notice This can be called to manually update pool price data
+     */
+    function initializePoolInfo() external onlyRole(ADMIN_ROLE) {
+        _updatePoolInfo();
+        emit PoolInfoInitialized(poolInfo.sqrtPriceX96, poolInfo.currentTick);
+    }
 
     /**
      * @dev Deposit MWG tokens for farming rewards
@@ -532,7 +541,7 @@ contract MWGFarmingPool is
             "Time overflow"
         );
         uint256 rewardPerDollar = timeElapsed * rewardPerSecond;
-        
+
         // Second check: rewardPerDollar * PRECISION
         require(
             rewardPerDollar <= type(uint256).max / PRECISION,
@@ -997,34 +1006,41 @@ contract MWGFarmingPool is
 
     /**
      * @dev Update pool price information
+     * @notice Silently fails if pool data cannot be fetched - this is by design
+     * Pool info is not critical for core farming functionality
      */
     function _updatePoolInfo() internal {
-        try IUniswapV3Pool(targetPool).slot0() returns (
-            uint160 sqrtPriceX96,
-            int24 tick,
-            uint16,
-            uint16,
-            uint16,
-            uint8,
-            bool
-        ) {
-            poolInfo.sqrtPriceX96 = sqrtPriceX96;
-            poolInfo.currentTick = tick;
-            poolInfo.lastUpdated = block.timestamp;
+        // Use low-level call to prevent revert propagation
+        // This ensures updatePool() doesn't fail just because pool info update fails
+        try this._updatePoolInfoExternal() {
+            // Success - pool info updated
         } catch {
-            // Handle error gracefully - pool might be paused or not exist
-            // Keep existing values if available, otherwise use safe defaults
-            if (poolInfo.lastUpdated == 0) {
-                // First time setup with safe defaults
-                poolInfo.sqrtPriceX96 = 0;
-                poolInfo.currentTick = 0;
-            }
-            // Update timestamp even if price fetch failed
+            // Silently handle failure - pool info is not critical
+            // Update timestamp to prevent repeated failures
             poolInfo.lastUpdated = block.timestamp;
 
             // Emit event for monitoring/debugging
             emit PoolPriceUpdateFailed(block.timestamp);
         }
+    }
+
+    /**
+     * @dev External wrapper for pool info update to enable proper try-catch
+     * @notice This must be external to work with try-catch in Solidity
+     */
+    function _updatePoolInfoExternal() external {
+        // Only allow calls from this contract
+        require(msg.sender == address(this), "Internal only");
+
+        // Call slot0() - will revert if fails
+        (uint160 sqrtPriceX96, int24 tick, , , , , ) = IUniswapV3Pool(
+            targetPool
+        ).slot0();
+
+        // Update pool info
+        poolInfo.sqrtPriceX96 = sqrtPriceX96;
+        poolInfo.currentTick = tick;
+        poolInfo.lastUpdated = block.timestamp;
     }
 
     // ==================== ERC721 RECEIVER ====================

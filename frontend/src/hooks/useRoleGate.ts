@@ -157,6 +157,7 @@ export function useMultiRoleGate() {
     gameAdmin.hasRole ||
     gameDefaultAdmin.hasRole ||
     rewardDistributor.hasRole ||
+    pauseRole.hasRole ||
     vaultAdmin.hasRole ||
     vaultDefaultAdmin.hasRole;
 

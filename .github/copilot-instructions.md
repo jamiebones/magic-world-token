@@ -455,3 +455,660 @@ The bot project will be a standalone Node.js application that:
 - Handles safety checks and circuit breakers
 
 See separate bot implementation guide for details.
+
+## MWG Farming Pool Frontend
+
+### Overview
+
+Liquidity farming frontend for MWGFarmingPool.sol contract. Users stake PancakeSwap V3 NFT positions (MWG/BNB) to earn MWG rewards with lock period multipliers up to 2x.
+
+### Contract Integration Points
+
+**Smart Contract:** `MWGFarmingPool.sol` (BSC Mainnet)
+
+**Key Features:**
+
+- Stake PancakeSwap V3 NFT positions
+- Earn MWG rewards based on USD value staked
+- Lock periods for bonus rewards (1x-2x multiplier)
+- TWAP oracle for price manipulation resistance
+- Emergency controls and admin functions
+
+**Lock Period Multipliers:**
+
+- No Lock: 1.0x (BASE_MULTIPLIER = 1000)
+- 7 days: 1.05x
+- 30 days: 1.1x
+- 90 days: 1.25x
+- 180 days: 1.5x
+- 365 days: 2.0x (MAX_LOCK_DAYS)
+
+### Frontend Pages Structure
+
+Following Next.js App Router pattern (same as `/frontend/src/app/`)
+
+#### Page 1: `/farming` - Farming Dashboard
+
+**Purpose:** Main entry point, farming overview and stats
+
+**Components:**
+
+```typescript
+// Display data from getFarmingStats()
+- Farming Stats Cards:
+  - Total Value Locked (totalStakedValue in USD)
+  - Current APR (from getCurrentAPR() - returns basis points)
+  - Total Rewards Distributed (totalRewardsDistributed)
+  - Available Rewards (getAvailableRewards())
+  - Farm Status (active/paused/ended based on farmingStartTime/farmingEndTime)
+
+- Lock Period Multipliers Chart:
+  - Visual display of all boost tiers
+  - Show boost calculation: getBoostMultiplier(lockDays)
+
+- Quick Action Buttons:
+  - "Stake Position" → /farming/stake
+  - "View My Positions" → /farming/positions
+  - "Claim Rewards" (if user has positions with pending > 0)
+
+- Recent Activity Feed:
+  - Listen to events: PositionStaked, PositionUnstaked, RewardsClaimed
+  - Real-time updates using wagmi useWatchContractEvent
+```
+
+**Contract Calls:**
+
+- `getFarmingStats()` → (totalStaked, totalRewards, availableRewards, currentAPR, participantCount, isActive)
+- Event listeners for live updates
+
+---
+
+#### Page 2: `/farming/stake` - Stake NFT Position
+
+**Purpose:** Stake PancakeSwap V3 NFT positions
+
+**Flow:**
+
+1. Fetch user's V3 NFT positions from PancakeSwap Position Manager
+2. Filter for MWG/BNB pool positions (verify pool address matches targetPool)
+3. Show position details with USD value preview
+4. Select lock period (0-365 days)
+5. Preview boost multiplier and estimated rewards
+6. Approve NFT transfer (if needed)
+7. Call `stakePosition(tokenId, lockDays)`
+
+**Components:**
+
+```typescript
+- NFT Position Selector:
+  - Fetch from INonfungiblePositionManager.positions(tokenId)
+  - Filter positions where pool == targetPool
+  - Display: tokenId, liquidity, tickRange, USD value estimate
+
+- Lock Period Configuration:
+  - Dropdown: 0, 7, 30, 90, 180, 365 days
+  - Real-time boost multiplier display (getBoostMultiplier(lockDays))
+  - Lock end date calculation
+  - Estimated APR with boost: currentAPR × (boostMultiplier/1000)
+
+- Position Value Preview:
+  - Calculate estimated USD value (client-side estimation)
+  - Contract will recalculate on-chain during stake
+
+- Approval & Stake Flow:
+  - Check NFT approval for farming contract
+  - Button: Approve NFT (setApprovalForAll)
+  - Button: Stake Position (stakePosition(tokenId, lockDays))
+```
+
+**Contract Calls:**
+
+- `getBoostMultiplier(lockDays)` → returns multiplier (1000-2000)
+- `stakePosition(tokenId, lockDays)` → stakes position
+- Events: `PositionStaked(user, tokenId, usdValue, lockDays, boostMultiplier)`
+
+**External Contracts:**
+
+- PancakeSwap Position Manager: `ownerOf(tokenId)`, `positions(tokenId)`
+- Check approval: `isApprovedForAll(owner, farmingContract)`
+- Set approval: `setApprovalForAll(farmingContract, true)`
+
+---
+
+#### Page 3: `/farming/positions` - My Staked Positions
+
+**Purpose:** View and manage all staked positions
+
+**Components:**
+
+```typescript
+- Position Cards Grid:
+  - For each tokenId in getUserPositions(address):
+    - Fetch StakedPosition struct from stakedPositions(tokenId)
+    - Display:
+      - Token ID with PancakeSwap NFT image
+      - USD value staked (position.usdValue)
+      - Current liquidity (position.liquidity)
+      - Staked date (position.stakedAt)
+      - Lock status: locked/unlocked
+      - Lock end countdown (if position.lockUntil > now)
+      - Boost multiplier (position.boostMultiplier / 1000 = 1.25x)
+      - Pending rewards (pendingRewards(tokenId))
+      - Action buttons based on state
+
+- Position Summary Cards:
+  - Total positions: getUserPositions(user).length
+  - Total staked value: userTotalValue[user]
+  - Total pending rewards: pendingRewardsForUser(user)
+  - Total claimed: userRewardsClaimed[user]
+
+- Position Actions:
+  - Claim button: enabled if pending > 0
+  - Unstake button: enabled if block.timestamp >= lockUntil
+  - Emergency unstake: shown if emergencyWithdrawEnabled == true
+```
+
+**Contract Calls:**
+
+- `getUserPositions(address)` → uint256[] tokenIds
+- `stakedPositions(tokenId)` → StakedPosition struct
+- `pendingRewards(tokenId)` → uint256 pending
+- `pendingRewardsForUser(address)` → uint256 totalPending
+- `userTotalValue[address]` → uint256 totalUSD
+- `userRewardsClaimed[address]` → uint256 claimed
+
+---
+
+#### Page 4: `/farming/rewards` - Rewards Management
+
+**Purpose:** Claim rewards from staked positions
+
+**Components:**
+
+```typescript
+- Claim All Section:
+  - Total pending: pendingRewardsForUser(user)
+  - Button: "Claim All Rewards" → claimAllRewards()
+  - Gas estimate display
+
+- Selective Claim Section:
+  - Checkbox list of positions with pending > 0
+  - Select positions to claim
+  - Button: "Claim Selected" → claimRewards(selectedTokenIds[])
+  - Validate: tokenIds.length <= MAX_BATCH_SIZE (50)
+
+- Rewards History Table:
+  - Listen to RewardsClaimed events filtered by user
+  - Display: timestamp, amount, tokenIds, txHash
+  - Link to BSCScan for transaction details
+
+- Rewards Statistics:
+  - Total claimed lifetime: userRewardsClaimed[user]
+  - Average daily earnings calculation
+  - Projected earnings based on current APR
+```
+
+**Contract Calls:**
+
+- `pendingRewardsForUser(address)` → uint256
+- `claimRewards(uint256[] tokenIds)` → claims specific positions
+- `claimAllRewards()` → claims all positions
+- Events: `RewardsClaimed(user, amount, tokenIds[])`
+
+**Validation:**
+
+- MAX_BATCH_SIZE = 50 (prevent DoS)
+- Check tokenIds.length before calling
+
+---
+
+#### Page 5: `/farming/unstake` - Unstake Positions
+
+**Purpose:** Unstake NFT positions and withdraw
+
+**Components:**
+
+```typescript
+- Unlocked Positions List:
+  - Filter positions where lockUntil <= block.timestamp
+  - Show position details
+  - Display pending rewards that will be claimed
+
+- Locked Positions List:
+  - Show countdown to unlock: lockUntil - block.timestamp
+  - Display time remaining in days/hours
+
+- Unstake Flow:
+  - Select position to unstake
+  - Preview: NFT returned + rewards claimed
+  - Warning: Position will be removed from farming
+  - Button: "Unstake Position" → unstakePosition(tokenId)
+
+- Emergency Unstake (if enabled):
+  - Show only if emergencyWithdrawEnabled == true
+  - Warning: No rewards will be claimed
+  - Require confirmation
+  - Button: "Emergency Unstake" → emergencyUnstake(tokenId)
+```
+
+**Contract Calls:**
+
+- `unstakePosition(tokenId)` → unstakes and claims rewards
+- `emergencyUnstake(tokenId)` → unstakes without rewards
+- `emergencyWithdrawEnabled` → bool
+- Events: `PositionUnstaked(user, tokenId, rewards)`
+
+**Effects:**
+
+- NFT transferred back to user
+- Rewards transferred (if not emergency)
+- Position removed from stakedPositions
+- userTotalValue decreased
+
+---
+
+#### Page 6: `/farming/analytics` - Farming Analytics
+
+**Purpose:** Historical data and performance metrics
+
+**Components:**
+
+```typescript
+- APR History Chart:
+  - Track getCurrentAPR() over time
+  - Line chart showing APR trends
+  - Use recharts or chart.js
+
+- TVL Chart:
+  - Track totalStakedValue over time
+  - Show user's contribution percentage
+
+- Rewards Distribution Chart:
+  - Daily/weekly rewards distributed
+  - User's share of total rewards
+
+- Position Performance Table:
+  - Individual position ROI calculation
+  - Compare different lock periods
+  - Boost multiplier effectiveness
+
+- Pool Health Metrics:
+  - Available rewards: getAvailableRewards()
+  - Reward depletion rate: calculate based on rewardPerSecond
+  - Days until farming ends: (farmingEndTime - now) / 86400
+  - Projected pool exhaustion timeline
+```
+
+**Data Sources:**
+
+- Periodic polling of contract state
+- Store historical data in local state/database
+- Events for transaction history
+
+---
+
+#### Page 7: `/farming/calculator` - Rewards Calculator
+
+**Purpose:** Estimate earnings before staking
+
+**Components:**
+
+```typescript
+- Input Section:
+  - USD value slider (100-10000 USD)
+  - Lock period dropdown (0-365 days)
+  - Current APR display (live from getCurrentAPR())
+
+- Calculation Engine:
+  - Base APR from contract
+  - Apply boost multiplier: APR × (boostMultiplier/1000)
+  - Calculate daily: (stakeValue × boostedAPR / 36500)
+  - Calculate weekly: daily × 7
+  - Calculate monthly: daily × 30
+  - Calculate until unlock: daily × lockDays
+
+- Results Display:
+  - Estimated daily rewards (MWG + USD value)
+  - Weekly rewards
+  - Monthly rewards
+  - Total until lock ends
+
+- Comparison Table:
+  - Side-by-side comparison of all lock periods
+  - Show ROI for each tier
+  - Highlight optimal lock period
+```
+
+**Contract Calls:**
+
+- `getCurrentAPR()` → uint256 (basis points)
+- `getBoostMultiplier(lockDays)` → uint256 (for each tier)
+
+**Calculations:**
+
+```javascript
+// APR is in basis points (10000 = 100%)
+baseAPR = getCurrentAPR() / 10000; // Convert to decimal
+boost = getBoostMultiplier(lockDays) / 1000; // 1000 = 1x
+boostedAPR = baseAPR * boost;
+
+// Daily rewards in MWG
+dailyRewardsMWG = (stakeValueUSD * boostedAPR) / 365;
+
+// Convert to USD using current MWG price
+dailyRewardsUSD = dailyRewardsMWG * mwgPriceUSD;
+```
+
+---
+
+#### Page 8: `/farming/admin` - Admin Dashboard
+
+**Purpose:** Admin controls (protected by roles)
+
+**Role Requirements:**
+
+- `ADMIN_ROLE` - Full admin access
+- `REWARD_MANAGER_ROLE` - Deposit rewards, set rates
+- `PAUSE_ROLE` - Pause/unpause contract
+
+**Sections:**
+
+**8a. Rewards Management (REWARD_MANAGER_ROLE)**
+
+```typescript
+- Deposit Rewards:
+  - Input: amount (MWG tokens)
+  - Current balance: totalRewardsDeposited - totalRewardsDistributed
+  - Button: "Deposit Rewards" → depositRewards(amount)
+  - Requires: MWG token approval first
+
+- Set Reward Rate:
+  - Current rate: rewardPerSecond (display in MWG/day)
+  - Input: new rate (with validation <= 1e18)
+  - APR impact calculator: show how APR changes
+  - Button: "Update Rate" → setRewardRate(newRate)
+
+- Extend Farming Period:
+  - Current end: farmingEndTime (display date)
+  - Input: additional seconds/days
+  - Preview: new end date
+  - Validation: max 5 years from now
+  - Button: "Extend Period" → extendFarming(additionalSeconds)
+```
+
+**8b. Emergency Controls (ADMIN_ROLE)**
+
+```typescript
+- Pause Contract:
+  - Current status: paused() → bool
+  - Toggle button: setPaused(true/false)
+  - Warning: Disables staking/claiming when paused
+
+- Enable Emergency Withdraw:
+  - Status: emergencyWithdrawEnabled
+  - Warning: IRREVERSIBLE action
+  - Confirmation modal required
+  - Button: "Enable Emergency" → enableEmergencyWithdraw()
+
+- Emergency Withdraw Rewards:
+  - Only if emergencyWithdrawEnabled == true
+  - Available: getAvailableRewards()
+  - Input: amount to withdraw
+  - Button: "Withdraw" → emergencyWithdrawRewards(amount)
+```
+
+**8c. Monitoring Dashboard**
+
+```typescript
+- Contract Health Metrics:
+  - Total staked: totalStakedValue (USD)
+  - Rewards deposited: totalRewardsDeposited
+  - Rewards distributed: totalRewardsDistributed
+  - Available rewards: getAvailableRewards()
+  - Reward rate: rewardPerSecond (MWG/second)
+  - Depletion timeline: estimate based on current rate
+
+- User Statistics:
+  - Total participants: track unique stakers
+  - Average position value: totalStaked / positionCount
+  - Total positions staked: count
+
+- Recent Transactions Feed:
+  - Live event listener for all contract events
+  - Filter by event type
+  - Display user, amount, timestamp, txHash
+```
+
+**Contract Calls:**
+
+- `depositRewards(amount)` - REWARD_MANAGER_ROLE
+- `setRewardRate(rate)` - ADMIN_ROLE
+- `extendFarming(seconds)` - ADMIN_ROLE
+- `setPaused(bool)` - PAUSE_ROLE
+- `enableEmergencyWithdraw()` - ADMIN_ROLE (irreversible)
+- `emergencyWithdrawRewards(amount)` - ADMIN_ROLE
+- All view functions for monitoring
+
+---
+
+### Shared Components to Create
+
+```typescript
+// /components/farming/
+
+1. FarmingStatsCard.tsx
+   - Props: title, value, change, icon, trend
+   - Reusable card for metrics display
+
+2. PositionCard.tsx
+   - Props: position (StakedPosition), onClaim, onUnstake
+   - Display individual position details
+   - Action buttons based on state
+
+3. LockPeriodSelector.tsx
+   - Props: selectedDays, onChange
+   - Dropdown with all lock tiers
+   - Show multiplier for each option
+
+4. RewardsDisplay.tsx
+   - Props: pendingAmount, onClaim
+   - Format MWG amount with USD value
+   - Claim button with loading state
+
+5. APRBadge.tsx
+   - Props: apr (basis points)
+   - Colored badge based on APR value
+   - Tooltip with calculation breakdown
+
+6. CountdownTimer.tsx
+   - Props: targetTimestamp
+   - Live countdown display
+   - Format: "X days Y hours Z minutes"
+
+7. BoostMultiplierBadge.tsx
+   - Props: multiplier (1000-2000)
+   - Visual indicator (1.0x - 2.0x)
+   - Color coding by boost level
+
+8. TransactionHistory.tsx
+   - Props: events[], filterBy
+   - Table with pagination
+   - Sort by date, filter by type
+
+9. EmergencyBanner.tsx
+   - Props: isActive (emergencyWithdrawEnabled)
+   - Warning banner when emergency mode active
+   - Sticky position at top
+
+10. FarmingChart.tsx
+    - Props: data[], type (APR/TVL/Rewards)
+    - Wrapper for recharts
+    - Responsive design
+```
+
+---
+
+### Custom Hooks to Create
+
+```typescript
+// /hooks/farming/
+
+1. useFarmingPool.ts
+   - useFarmingStats() → getFarmingStats() data
+   - useRewardRate() → rewardPerSecond
+   - useFarmingPeriod() → start/end timestamps
+   - useEmergencyStatus() → emergencyWithdrawEnabled
+   - usePaused() → paused() status
+
+2. useStakedPositions.ts
+   - useUserPositions(address) → getUserPositions()
+   - usePositionDetails(tokenId) → stakedPositions mapping
+   - usePositionPendingRewards(tokenId) → pendingRewards()
+   - useUserTotalValue(address) → userTotalValue mapping
+   - useUserRewardsClaimed(address) → userRewardsClaimed mapping
+
+3. useFarmingActions.ts
+   - useStakePosition() → transaction hook for stakePosition()
+   - useUnstakePosition() → transaction hook for unstakePosition()
+   - useClaimRewards() → transaction hook for claimRewards()
+   - useClaimAllRewards() → transaction hook for claimAllRewards()
+   - useEmergencyUnstake() → transaction hook for emergencyUnstake()
+
+4. useFarmingAdmin.ts (protected)
+   - useDepositRewards() → depositRewards() transaction
+   - useSetRewardRate() → setRewardRate() transaction
+   - useExtendFarming() → extendFarming() transaction
+   - useSetPaused() → setPaused() transaction
+   - useEnableEmergency() → enableEmergencyWithdraw() transaction
+   - useEmergencyWithdrawRewards() → emergencyWithdrawRewards() transaction
+
+5. useFarmingEvents.ts
+   - useFarmingEvents() → watch all contract events
+   - usePositionStakedEvents() → filter PositionStaked
+   - useRewardsClaimedEvents() → filter RewardsClaimed
+   - usePositionUnstakedEvents() → filter PositionUnstaked
+   - useRecentActivity(limit) → parse events for activity feed
+
+6. useNFTPositions.ts
+   - useUserNFTPositions() → fetch from Position Manager
+   - useNFTApproval() → check/set approval
+   - usePositionValue(tokenId) → estimate USD value
+   - useFilterMWGPositions() → filter for MWG/BNB pool
+
+7. useFarmingCalculations.ts
+   - useAPRCalculation(stakeValue, lockDays) → estimated rewards
+   - useBoostMultiplier(lockDays) → getBoostMultiplier()
+   - useLockEndDate(lockDays) → calculate unlock timestamp
+   - useRewardProjection(position) → future earnings estimate
+```
+
+---
+
+### Contract ABIs Required
+
+Add to `/abis/`:
+
+```typescript
+1. MWGFarmingPool.json
+   - Full ABI for farming contract
+   - All view/write functions
+   - All events
+
+2. INonfungiblePositionManager.json
+   - PancakeSwap V3 Position Manager
+   - Functions: positions(), ownerOf(), isApprovedForAll(), setApprovalForAll()
+
+3. IUniswapV3Pool.json
+   - For direct pool queries (if needed)
+   - Functions: slot0(), observe()
+```
+
+---
+
+### Configuration Updates
+
+**Add to `/config/contracts.ts`:**
+
+```typescript
+export const CONTRACT_ADDRESSES = {
+  // ... existing contracts
+  FARMING_POOL: "0x..." as Address, // MWGFarmingPool address
+  PANCAKE_POSITION_MANAGER:
+    "0x46A15B0b27311cedF172AB29E4f4766fbE7F4364" as Address, // PancakeSwap V3
+  MWG_BNB_POOL: "0x..." as Address, // Target pool address
+};
+
+export const FARMING_CONFIG = {
+  MAX_BATCH_SIZE: 50,
+  MAX_LOCK_DAYS: 365,
+  BASE_MULTIPLIER: 1000,
+  LOCK_TIERS: [
+    { days: 0, multiplier: 1000, label: "No Lock", boost: "1.0x" },
+    { days: 7, multiplier: 1050, label: "1 Week", boost: "1.05x" },
+    { days: 30, multiplier: 1100, label: "1 Month", boost: "1.1x" },
+    { days: 90, multiplier: 1250, label: "3 Months", boost: "1.25x" },
+    { days: 180, multiplier: 1500, label: "6 Months", boost: "1.5x" },
+    { days: 365, multiplier: 2000, label: "1 Year", boost: "2.0x" },
+  ],
+};
+```
+
+---
+
+### Navigation Updates
+
+**Update `/components/SideNav.tsx`:**
+
+```typescript
+const navLinks: NavLink[] = [
+  // ... existing links
+  {
+    href: "/farming",
+    label: "Farming",
+    showAlways: true,
+    icon: <FarmingIcon />, // Add farming icon
+  },
+  {
+    href: "/farming/positions",
+    label: "My Positions",
+    showAlways: true,
+    icon: <PositionsIcon />,
+  },
+  {
+    href: "/farming/admin",
+    label: "Farming Admin",
+    requiresAdmin: true,
+    icon: <AdminIcon />,
+  },
+];
+```
+
+---
+
+### Implementation Phases - Step by Step
+
+**Phase 1: Project Setup (Day 1)**
+
+1. Create farming directory structure
+2. Add contract ABIs
+3. Update contract addresses config
+4. Create farming types/interfaces
+5. Set up basic routing structure
+
+**Phase 2: Core Hooks (Day 2-3)** 6. Implement useFarmingPool hook 7. Implement useStakedPositions hook 8. Implement useFarmingActions hook 9. Implement useNFTPositions hook 10. Add error handling and loading states
+
+**Phase 3: Shared Components (Day 4-5)** 11. Create FarmingStatsCard component 12. Create PositionCard component 13. Create LockPeriodSelector component 14. Create RewardsDisplay component 15. Create APRBadge component 16. Create CountdownTimer component 17. Create BoostMultiplierBadge component
+
+**Phase 4: Main Pages (Day 6-10)** 18. Implement /farming (Dashboard) page 19. Implement /farming/stake page 20. Implement /farming/positions page 21. Implement /farming/rewards page 22. Implement /farming/unstake page 23. Add event listeners for live updates
+
+**Phase 5: Analytics & Calculator (Day 11-12)** 24. Implement /farming/analytics page 25. Implement /farming/calculator page 26. Add chart components 27. Add historical data tracking
+
+**Phase 6: Admin Pages (Day 13-14)** 28. Implement /farming/admin page 29. Add role-based access control 30. Implement rewards management section 31. Implement emergency controls section 32. Add monitoring dashboard
+
+**Phase 7: Polish & Testing (Day 15-16)** 33. Add loading skeletons 34. Implement error boundaries 35. Add toast notifications 36. Mobile responsive design 37. Cross-browser testing 38. Gas optimization checks
+
+**Phase 8: Integration Testing (Day 17-18)** 39. Test with real contract on testnet 40. Test all transaction flows 41. Test edge cases (locked positions, emergency mode) 42. Test event listeners 43. Performance optimization
+
+**Phase 9: Documentation (Day 19)** 44. Add inline code comments 45. Create user guide 46. Document admin functions 47. Create troubleshooting guide
+
+**Phase 10: Deployment (Day 20)** 48. Deploy to production 49. Monitor for issues 50. Collect user feedback 51. Iterate based on feedback

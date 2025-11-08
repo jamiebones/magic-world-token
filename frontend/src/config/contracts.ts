@@ -3,6 +3,8 @@ export const CONTRACT_ADDRESSES = {
   TOKEN: process.env.NEXT_PUBLIC_TOKEN_CONTRACT_ADDRESS as `0x${string}`,
   GAME: process.env.NEXT_PUBLIC_GAME_CONTRACT_ADDRESS as `0x${string}`,
   PARTNER_VAULT: process.env.NEXT_PUBLIC_PARTNER_VAULT_ADDRESS as `0x${string}`,
+  FARMING_POOL: process.env.NEXT_PUBLIC_FARMING_POOL_ADDRESS as `0x${string}`,
+  MWG_BNB_POOL: process.env.NEXT_PUBLIC_MWG_BNB_POOL_ADDRESS as `0x${string}`,
 } as const;
 
 // Debug logging
@@ -11,6 +13,8 @@ if (typeof window !== 'undefined') {
     TOKEN: CONTRACT_ADDRESSES.TOKEN,
     GAME: CONTRACT_ADDRESSES.GAME,
     PARTNER_VAULT: CONTRACT_ADDRESSES.PARTNER_VAULT,
+    FARMING_POOL: CONTRACT_ADDRESSES.FARMING_POOL,
+    MWG_BNB_POOL: CONTRACT_ADDRESSES.MWG_BNB_POOL,
   });
 }
 
@@ -63,3 +67,17 @@ export function getWBNBAddress(chainId?: number): `0x${string}` {
   return (WBNB_BY_CHAIN[id] ?? PANCAKESWAP_V3.WBNB) as `0x${string}`;
 }
 
+// Farming Pool Configuration
+export const FARMING_CONFIG = {
+  MAX_BATCH_SIZE: 50,
+  MAX_LOCK_DAYS: 365,
+  BASE_MULTIPLIER: 1000,
+  LOCK_TIERS: [
+    { days: 0, multiplier: 1000, label: "No Lock", boost: "1.0x" },
+    { days: 7, multiplier: 1050, label: "1 Week", boost: "1.05x" },
+    { days: 30, multiplier: 1100, label: "1 Month", boost: "1.1x" },
+    { days: 90, multiplier: 1250, label: "3 Months", boost: "1.25x" },
+    { days: 180, multiplier: 1500, label: "6 Months", boost: "1.5x" },
+    { days: 365, multiplier: 2000, label: "1 Year", boost: "2.0x" },
+  ],
+} as const;

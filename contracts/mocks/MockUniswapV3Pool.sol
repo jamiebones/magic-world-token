@@ -8,6 +8,7 @@ contract MockUniswapV3Pool {
 
     uint160 private sqrtPriceX96;
     int24 private tick;
+    bool private shouldRevert;
 
     constructor(address _token0, address _token1, uint24 _fee) {
         token0 = _token0;
@@ -18,6 +19,10 @@ contract MockUniswapV3Pool {
     function setSlot0(uint160 _sqrtPriceX96, int24 _tick) external {
         sqrtPriceX96 = _sqrtPriceX96;
         tick = _tick;
+    }
+
+    function setShouldRevert(bool _shouldRevert) external {
+        shouldRevert = _shouldRevert;
     }
 
     function slot0()
@@ -33,6 +38,7 @@ contract MockUniswapV3Pool {
             bool unlocked
         )
     {
+        require(!shouldRevert, "Mock pool slot0 reverted");
         return (sqrtPriceX96, tick, 0, 0, 0, 0, true);
     }
 }

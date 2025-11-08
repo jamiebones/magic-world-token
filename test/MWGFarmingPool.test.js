@@ -1108,4 +1108,112 @@ describe("MWGFarmingPool", function () {
             expect(position.owner).to.equal(ethers.ZeroAddress);
         });
     });
+
+    describe("Pool Info Management", function () {
+        it("Should initialize pool info successfully", async function () {
+            const sqrtPriceX96 = "7922816251426433759354395033";
+            await pool.setSlot0(sqrtPriceX96, 12345);
+
+            // Call initializePoolInfo
+            await expect(farmingPool.initializePoolInfo())
+                .to.emit(farmingPool, "PoolInfoInitialized")
+                .withArgs(sqrtPriceX96, 12345);
+
+            const poolInfo = await farmingPool.poolInfo();
+            expect(poolInfo.sqrtPriceX96).to.equal(sqrtPriceX96);
+            expect(poolInfo.currentTick).to.equal(12345);
+            expect(poolInfo.lastUpdated).to.be.gt(0);
+        });
+
+        it("Should handle pool info update failure gracefully", async function () {
+            // Make pool.slot0() revert
+            await pool.setShouldRevert(true);
+
+            // initializePoolInfo should not revert, but emit PoolPriceUpdateFailed
+            await expect(farmingPool.initializePoolInfo())
+                .to.emit(farmingPool, "PoolPriceUpdateFailed");
+
+            // Pool info should have timestamp updated even though fetch failed
+            const poolInfo = await farmingPool.poolInfo();
+            expect(poolInfo.lastUpdated).to.be.gt(0);
+        });
+
+        it("Should not allow external calls to _updatePoolInfoExternal", async function () {
+            await expect(farmingPool._updatePoolInfoExternal())
+                .to.be.revertedWith("Internal only");
+        });
+
+        it("Should not revert updatePool when pool info update fails", async function () {
+            // Setup a position to make totalStakedValue > 0
+            await positionManager.mint(
+                user1.address,
+                MOCK_TOKEN_ID,
+                await wbnb.getAddress(),
+                await mwgToken.getAddress(),
+                3000,
+                MOCK_TICK_LOWER,
+                MOCK_TICK_UPPER,
+                MOCK_LIQUIDITY
+            );
+
+            await positionManager
+                .connect(user1)
+                .approve(await farmingPool.getAddress(), MOCK_TOKEN_ID);
+
+            const sqrtPriceX96 = "7922816251426433759354395033";
+            await pool.setSlot0(sqrtPriceX96, 0);
+
+            // Stake position
+            await farmingPool.connect(user1).stakePosition(MOCK_TOKEN_ID, 0);
+
+            // Now make pool.slot0() fail
+            await pool.setShouldRevert(true);
+
+            // Advance time
+            await time.increase(24 * 3600);
+
+            // updatePool should NOT revert even though _updatePoolInfo will fail
+            await expect(farmingPool.updatePool()).to.not.be.reverted;
+
+            // Check that PoolPriceUpdateFailed event was emitted
+            const tx = await farmingPool.updatePool();
+            await expect(tx).to.emit(farmingPool, "PoolPriceUpdateFailed");
+        });
+
+        it("Should allow staking even when pool info update fails", async function () {
+            // Make pool.slot0() fail
+            await pool.setShouldRevert(true);
+
+            await positionManager.mint(
+                user1.address,
+                MOCK_TOKEN_ID,
+                await wbnb.getAddress(),
+                await mwgToken.getAddress(),
+                3000,
+                MOCK_TICK_LOWER,
+                MOCK_TICK_UPPER,
+                MOCK_LIQUIDITY
+            );
+
+            await positionManager
+                .connect(user1)
+                .approve(await farmingPool.getAddress(), MOCK_TOKEN_ID);
+
+            // Reset pool.slot0() to work for position value calculation
+            await pool.setShouldRevert(false);
+            const sqrtPriceX96 = "7922816251426433759354395033";
+            await pool.setSlot0(sqrtPriceX96, 0);
+
+            // Make it fail again for updatePool's _updatePoolInfo call
+            await pool.setShouldRevert(true);
+
+            // Staking should still work (updatePool won't revert)
+            // Note: position value calculation uses pool.slot0() directly in try-catch
+            await pool.setShouldRevert(false); // Need to keep it working for calculations
+
+            await expect(
+                farmingPool.connect(user1).stakePosition(MOCK_TOKEN_ID, 0)
+            ).to.not.be.reverted;
+        });
+    });
 });

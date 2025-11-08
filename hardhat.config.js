@@ -25,6 +25,11 @@ module.exports = {
                 mnemonic: process.env.MNEMONIC || "test test test test test test test test test test test junk",
                 count: 20,
             },
+            forking: {
+                url: process.env.BSC_MAINNET_RPC_URL || "https://bsc-dataseed1.binance.org/",
+                enabled: process.env.FORK === "true",
+                blockNumber: process.env.FORK_BLOCK_NUMBER ? Number(process.env.FORK_BLOCK_NUMBER) : undefined,
+            },
         },
         localhost: {
             url: "http://127.0.0.1:8545",
