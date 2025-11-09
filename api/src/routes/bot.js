@@ -598,7 +598,8 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
             liquidity: liquidityObj
         });
 
-        await trade.save();
+        // Note: Don't save() here - will save after execution in markSuccess/markFailed
+        // This prevents "Can't save() the same doc multiple times in parallel" error
 
         // Execute trade
         let result;
