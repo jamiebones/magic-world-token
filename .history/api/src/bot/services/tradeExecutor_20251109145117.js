@@ -320,154 +320,8 @@ class TradeExecutor {
      * @returns {Promise<Object>} Trade result
      */
     async executeSell(mwtAmount, minBNBOut, slippage = 0.02, urgency = 'MEDIUM') {
-        if (this.isV3) {
-            return this.executeSellV3(mwtAmount, minBNBOut, slippage, urgency);
-        } else {
-            return this.executeSellV2(mwtAmount, minBNBOut, slippage, urgency);
-        }
-    }
-
-    /**
-     * Execute SELL operation on V3 (MWT → BNB)
-     */
-    async executeSellV3(mwtAmount, minBNBOut, slippage = 0.02, urgency = 'MEDIUM') {
         try {
-            logger.info(`🔴 Executing V3 SELL: ${mwtAmount} MWT → BNB (slippage: ${slippage * 100}%)`);
-
-            // 1. Check MWT balance
-            const balance = await this.mwtToken.balanceOf(this.wallet.address);
-            const required = ethers.parseEther(mwtAmount.toString());
-
-            if (balance < required) {
-                throw new Error(
-                    `Insufficient MWT balance. Have: ${ethers.formatEther(balance)}, Need: ${mwtAmount}`
-                );
-            }
-
-            logger.info(`✅ Balance check passed: ${ethers.formatEther(balance)} MWT available`);
-
-            // 2. Check and approve if needed
-            await this.ensureApproval(required);
-
-            // 3. Estimate output amount
-            const estimate = await this.estimateSwapOutput(mwtAmount, false);
-            const expectedOut = parseFloat(estimate.amountOut);
-
-            // 4. Calculate minimum output with slippage protection
-            const minOut = ethers.parseEther((expectedOut * (1 - slippage)).toFixed(18));
-            logger.info(`📊 Expected out: ${expectedOut} BNB`);
-            logger.info(`📊 Min BNB out (with ${slippage * 100}% slippage): ${ethers.formatEther(minOut)}`);
-
-            // 5. Set deadline (20 minutes from now)
-            const deadline = Math.floor(Date.now() / 1000) + 1200;
-
-            // 6. Prepare V3 swap params
-            const params = {
-                tokenIn: process.env.TOKEN_CONTRACT_ADDRESS,
-                tokenOut: this.WBNB,
-                fee: this.V3_FEE,
-                recipient: ethers.ZeroAddress, // Send WBNB to router first, then unwrap
-                deadline: deadline,
-                amountIn: required,
-                amountOutMinimum: minOut,
-                sqrtPriceLimitX96: 0 // No price limit
-            };
-
-            // 7. Get optimal gas price based on urgency
-            const gasPrice = await this.getOptimalGasPrice(urgency);
-            logger.info(`⛽ Gas price: ${ethers.formatUnits(gasPrice, 'gwei')} Gwei (${urgency})`);
-
-            // 8. Get next nonce
-            const nonce = await this.getNextNonce();
-            logger.info(`🔢 Using nonce: ${nonce}`);
-
-            // 9. Estimate gas limit
-            let gasLimit;
-            try {
-                gasLimit = await this.router.exactInputSingle.estimateGas(params);
-                logger.info(`📊 Estimated gas: ${gasLimit.toString()}`);
-            } catch (estimateError) {
-                logger.warn(`⚠️ Gas estimation failed, using default: ${estimateError.message}`);
-                gasLimit = 300000n; // Default gas limit for V3 swaps
-            }
-
-            // 10. Execute swap using multicall (swap + unwrap WBNB to BNB)
-            logger.info(`📤 Sending V3 swap transaction...`);
-            
-            const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
-            const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9(uint256,address)', [
-                minOut,
-                this.wallet.address
-            ]);
-
-            const tx = await this.router.multicall(
-                [swapData, unwrapData],
-                {
-                    gasPrice,
-                    gasLimit: gasLimit + (gasLimit * 20n / 100n), // Add 20% buffer
-                    nonce
-                }
-            );
-
-            logger.info(`📤 Transaction sent: ${tx.hash}`);
-
-            // 11. Wait for confirmation
-            logger.info(`⏳ Waiting for confirmation...`);
-            const receipt = await tx.wait();
-
-            // 12. Calculate actual gas cost
-            const gasCost = receipt.gasUsed * receipt.gasPrice;
-            const gasCostBNB = ethers.formatEther(gasCost);
-
-            logger.info(`✅ V3 SELL executed successfully!`);
-            logger.info(`   Block: ${receipt.blockNumber}`);
-            logger.info(`   Gas used: ${receipt.gasUsed.toString()}`);
-            logger.info(`   Gas cost: ${gasCostBNB} BNB`);
-
-            return {
-                success: true,
-                action: 'SELL',
-                txHash: tx.hash,
-                blockNumber: receipt.blockNumber,
-                gasUsed: receipt.gasUsed.toString(),
-                gasPrice: receipt.gasPrice.toString(),
-                gasCostBNB,
-                inputAmount: mwtAmount,
-                inputToken: 'MWT',
-                outputToken: 'BNB',
-                minOutputAmount: ethers.formatEther(minOut),
-                path: [process.env.TOKEN_CONTRACT_ADDRESS, this.WBNB],
-                slippage,
-                urgency,
-                poolType: 'V3',
-                fee: this.V3_FEE,
-                timestamp: new Date()
-            };
-
-        } catch (error) {
-            logger.error(`❌ V3 SELL execution failed:`, error);
-
-            // Parse error for better reporting
-            const errorMessage = this.parseError(error);
-
-            return {
-                success: false,
-                action: 'SELL',
-                error: errorMessage,
-                inputAmount: mwtAmount,
-                inputToken: 'MWT',
-                outputToken: 'BNB',
-                timestamp: new Date()
-            };
-        }
-    }
-
-    /**
-     * Execute SELL operation on V2 (MWT → BNB)
-     */
-    async executeSellV2(mwtAmount, minBNBOut, slippage = 0.02, urgency = 'MEDIUM') {
-        try {
-            logger.info(`🔴 Executing V2 SELL: ${mwtAmount} MWT → BNB (slippage: ${slippage * 100}%)`);
+            logger.info(`🔴 Executing SELL: ${mwtAmount} MWT → BNB (slippage: ${slippage * 100}%)`);
 
             // 1. Check MWT balance
             const balance = await this.mwtToken.balanceOf(this.wallet.address);
@@ -537,7 +391,7 @@ class TradeExecutor {
             const gasCost = receipt.gasUsed * receipt.gasPrice;
             const gasCostBNB = ethers.formatEther(gasCost);
 
-            logger.info(`✅ V2 SELL executed successfully!`);
+            logger.info(`✅ SELL executed successfully!`);
             logger.info(`   Block: ${receipt.blockNumber}`);
             logger.info(`   Gas used: ${receipt.gasUsed.toString()}`);
             logger.info(`   Gas cost: ${gasCostBNB} BNB`);
@@ -557,12 +411,11 @@ class TradeExecutor {
                 path,
                 slippage,
                 urgency,
-                poolType: 'V2',
                 timestamp: new Date()
             };
 
         } catch (error) {
-            logger.error(`❌ V2 SELL execution failed:`, error);
+            logger.error(`❌ SELL execution failed:`, error);
 
             // Parse error for better reporting
             const errorMessage = this.parseError(error);
