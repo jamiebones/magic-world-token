@@ -98,14 +98,15 @@ class TradeExecutor {
             // 4. Set deadline (20 minutes from now)
             const deadline = Math.floor(Date.now() / 1000) + 1200;
 
-            // 5. Prepare V3 swap params (deadline is passed in multicall, not in params)
+            // 5. Prepare V3 swap params for BUY (BNB → MWT)
+            // deadline is passed in multicall, not in params
             const params = {
-                tokenIn: this.mwtToken,
-                tokenOut: this.wbnb,
+                tokenIn: this.wbnb,      // Input: WBNB
+                tokenOut: this.mwtToken, // Output: MWT
                 fee: this.V3_FEE,
-                recipient: ethers.ZeroAddress, // Use address(0) when unwrapping via multicall
-                amountIn: amountToSell,
-                amountOutMinimum: minOut,
+                recipient: this.wallet.address, // Receive MWT tokens
+                amountIn: required,      // BNB amount to spend
+                amountOutMinimum: minOut, // Min MWT to receive
                 sqrtPriceLimitX96: 0
             };
 
