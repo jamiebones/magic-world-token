@@ -100,13 +100,13 @@ class TradeExecutor {
 
             // 5. Prepare V3 swap params (deadline is passed in multicall, not in params)
             const params = {
-                tokenIn: this.mwtToken,
-                tokenOut: this.wbnb,
+                tokenIn: this.WBNB,
+                tokenOut: process.env.TOKEN_CONTRACT_ADDRESS,
                 fee: this.V3_FEE,
-                recipient: ethers.ZeroAddress, // Use address(0) when unwrapping via multicall
-                amountIn: amountToSell,
+                recipient: this.wallet.address,
+                amountIn: required,
                 amountOutMinimum: minOut,
-                sqrtPriceLimitX96: 0
+                sqrtPriceLimitX96: 0 // No price limit
             };
 
             // 6. Get optimal gas price based on urgency
@@ -393,9 +393,8 @@ class TradeExecutor {
             logger.info(`📤 Sending V3 swap transaction...`);
             
             const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
-            // Use unwrapWETH9 with 2 parameters: (amountMinimum, recipient)
-            const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9(uint256,address)', [
-                0, // Accept any amount (already protected by minOut in swap)
+            const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9', [
+                minOut,
                 this.wallet.address
             ]);
 
