@@ -98,13 +98,12 @@ class TradeExecutor {
             // 4. Set deadline (20 minutes from now)
             const deadline = Math.floor(Date.now() / 1000) + 1200;
 
-            // 5. Prepare V3 swap params
+            // 5. Prepare V3 swap params (deadline is passed in multicall, not in params)
             const params = {
                 tokenIn: this.WBNB,
                 tokenOut: process.env.TOKEN_CONTRACT_ADDRESS,
                 fee: this.V3_FEE,
                 recipient: this.wallet.address,
-                deadline: deadline,
                 amountIn: required,
                 amountOutMinimum: minOut,
                 sqrtPriceLimitX96: 0 // No price limit
@@ -130,11 +129,12 @@ class TradeExecutor {
 
             // 9. Execute swap using multicall for better error handling
             logger.info(`📤 Sending V3 swap transaction...`);
-
+            
             const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
             const refundData = this.router.interface.encodeFunctionData('refundETH', []);
-
+            
             const tx = await this.router.multicall(
+                deadline, // Pass deadline as first parameter
                 [swapData, refundData],
                 {
                     value: required,
@@ -142,9 +142,7 @@ class TradeExecutor {
                     gasLimit: gasLimit + (gasLimit * 20n / 100n), // Add 20% buffer
                     nonce
                 }
-            );
-
-            logger.info(`📤 Transaction sent: ${tx.hash}`);
+            );            logger.info(`📤 Transaction sent: ${tx.hash}`);
 
             // 10. Wait for confirmation
             logger.info(`⏳ Waiting for confirmation...`);
@@ -361,13 +359,12 @@ class TradeExecutor {
             // 5. Set deadline (20 minutes from now)
             const deadline = Math.floor(Date.now() / 1000) + 1200;
 
-            // 6. Prepare V3 swap params
+            // 6. Prepare V3 swap params (deadline is passed in multicall, not in params)
             const params = {
                 tokenIn: process.env.TOKEN_CONTRACT_ADDRESS,
                 tokenOut: this.WBNB,
                 fee: this.V3_FEE,
                 recipient: ethers.ZeroAddress, // Send WBNB to router first, then unwrap
-                deadline: deadline,
                 amountIn: required,
                 amountOutMinimum: minOut,
                 sqrtPriceLimitX96: 0 // No price limit
@@ -393,23 +390,22 @@ class TradeExecutor {
 
             // 10. Execute swap using multicall (swap + unwrap WBNB to BNB)
             logger.info(`📤 Sending V3 swap transaction...`);
-
+            
             const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
-            const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9(uint256,address)', [
+            const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9', [
                 minOut,
                 this.wallet.address
             ]);
 
             const tx = await this.router.multicall(
+                deadline, // Pass deadline as first parameter
                 [swapData, unwrapData],
                 {
                     gasPrice,
                     gasLimit: gasLimit + (gasLimit * 20n / 100n), // Add 20% buffer
                     nonce
                 }
-            );
-
-            logger.info(`📤 Transaction sent: ${tx.hash}`);
+            );            logger.info(`📤 Transaction sent: ${tx.hash}`);
 
             // 11. Wait for confirmation
             logger.info(`⏳ Waiting for confirmation...`);
