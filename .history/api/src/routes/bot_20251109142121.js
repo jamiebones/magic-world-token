@@ -568,22 +568,8 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
         const prices = await priceOracle.getAllPrices();
         const deviation = await priceOracle.getPegDeviation();
 
-        // Create trade record with placeholders for required chain fields
-        const tradeId = `trade_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-
-        // Prepare liquidity object expected by Trade model
-        const liquidityObj = {
-            totalUSD: typeof prices.liquidity === 'number' ? prices.liquidity : (Number(prices.liquidity) || 0),
-            mwtReserve: prices.mwtReserve ? String(prices.mwtReserve) : null,
-            bnbReserve: prices.bnbReserve ? String(prices.bnbReserve) : null
-        };
-
+        // Create trade record
         const trade = new Trade({
-            tradeId,
-            // temporary unique txHash until real tx executed
-            txHash: `pending_${tradeId}`,
-            // placeholder blockNumber (0 until mined)
-            blockNumber: 0,
             action,
             inputAmount: amount.toString(),
             inputToken: action === 'BUY' ? 'BNB' : 'MWT',
@@ -592,10 +578,9 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
             slippage: slippage || req.botConfig.slippage.default,
             urgency: urgency || 'MEDIUM',
             status: 'PENDING',
-            marketPriceAtExecution: prices.mwtBnb ? String(prices.mwtBnb) : null,
-            // store numeric peg deviation (percentage number, e.g. -0.43)
-            pegDeviation: typeof deviation.deviation === 'number' ? deviation.deviation : parseFloat((deviation.deviationPercentage || '').replace('%', '')) || 0,
-            liquidity: liquidityObj
+            marketPriceAtExecution: prices.mwtBnb.toString(),
+            pegDeviation: deviation.deviation, // Use the numeric deviation, not the percentage string
+            liquidity: prices.liquidity || '0'
         });
 
         await trade.save();
@@ -620,13 +605,9 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
 
         // Update trade record
         if (result.success) {
-            // Attach on-chain identifiers if available
-            trade.txHash = result.txHash || trade.txHash;
-            trade.blockNumber = result.blockNumber || trade.blockNumber;
-
             await trade.markSuccess({
                 outputAmount: result.minOutputAmount,
-                executionPrice: parseFloat(result.inputAmount) / parseFloat(result.minOutputAmount || '1'),
+                executionPrice: result.inputAmount / parseFloat(result.minOutputAmount),
                 gasUsed: result.gasUsed,
                 gasPrice: result.gasPrice,
                 gasCostBNB: result.gasCostBNB
@@ -635,11 +616,7 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
             // Update bot statistics
             await req.botConfig.recordTrade(trade);
         } else {
-            // If a txHash / blockNumber are present even on failure, persist them
-            trade.txHash = result.txHash || trade.txHash;
-            trade.blockNumber = result.blockNumber || trade.blockNumber;
-
-            await trade.markFailed(result.error || 'Execution failed');
+            await trade.markFailed(result.error);
             await req.botConfig.recordTrade(trade);
         }
 

@@ -620,13 +620,9 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
 
         // Update trade record
         if (result.success) {
-            // Attach on-chain identifiers if available
-            trade.txHash = result.txHash || trade.txHash;
-            trade.blockNumber = result.blockNumber || trade.blockNumber;
-
             await trade.markSuccess({
                 outputAmount: result.minOutputAmount,
-                executionPrice: parseFloat(result.inputAmount) / parseFloat(result.minOutputAmount || '1'),
+                executionPrice: result.inputAmount / parseFloat(result.minOutputAmount),
                 gasUsed: result.gasUsed,
                 gasPrice: result.gasPrice,
                 gasCostBNB: result.gasCostBNB
@@ -635,11 +631,7 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
             // Update bot statistics
             await req.botConfig.recordTrade(trade);
         } else {
-            // If a txHash / blockNumber are present even on failure, persist them
-            trade.txHash = result.txHash || trade.txHash;
-            trade.blockNumber = result.blockNumber || trade.blockNumber;
-
-            await trade.markFailed(result.error || 'Execution failed');
+            await trade.markFailed(result.error);
             await req.botConfig.recordTrade(trade);
         }
 
