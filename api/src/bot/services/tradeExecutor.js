@@ -101,8 +101,8 @@ class TradeExecutor {
             // 5. Prepare V3 swap params for BUY (BNB → MWT)
             // deadline is passed in multicall, not in params
             const params = {
-                tokenIn: this.wbnb,      // Input: WBNB
-                tokenOut: this.mwtToken, // Output: MWT
+                tokenIn: this.WBNB,      // Input: WBNB
+                tokenOut: this.mwtToken.target, // Output: MWT (use .target for address)
                 fee: this.V3_FEE,
                 recipient: this.wallet.address, // Receive MWT tokens
                 amountIn: required,      // BNB amount to spend
