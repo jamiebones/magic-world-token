@@ -60,11 +60,11 @@ async function testBotAPI() {
 
             let response;
             if (method === 'GET') {
-                response = await api.get(url);
+                response = await axios.get(url);
             } else if (method === 'POST') {
-                response = await api.post(url, data);
+                response = await axios.post(url, data);
             } else if (method === 'PUT') {
-                response = await api.put(url, data);
+                response = await axios.put(url, data);
             }
 
             if (response.status === expectedStatus) {

@@ -14,31 +14,31 @@ const api = axios.create({
 
 const API_ENDPOINTS = {
     // Price endpoints
-    currentPrices: `/api/bot/prices/current`,
-    deviation: `/api/bot/prices/deviation`,
-    priceHistory: `/api/bot/prices/history`,
-    priceStats: `/api/bot/prices/statistics`,
-    liquidity: `/api/bot/liquidity`,
+    currentPrices: `${API_BASE_URL}/api/bot/prices/current`,
+    deviation: `${API_BASE_URL}/api/bot/prices/deviation`,
+    priceHistory: `${API_BASE_URL}/api/bot/prices/history`,
+    priceStats: `${API_BASE_URL}/api/bot/prices/statistics`,
+    liquidity: `${API_BASE_URL}/api/bot/liquidity`,
 
     // Trade endpoints
-    executeTradeEndpoint: `/api/bot/trade/execute`,
-    estimateTrade: `/api/bot/trade/estimate`,
-    tradeHistory: `/api/bot/trade/history`,
-    tradeStats: `/api/bot/trade/statistics`,
+    executeTradeEndpoint: `${API_BASE_URL}/api/bot/trade/execute`,
+    estimateTrade: `${API_BASE_URL}/api/bot/trade/estimate`,
+    tradeHistory: `${API_BASE_URL}/api/bot/trade/history`,
+    tradeStats: `${API_BASE_URL}/api/bot/trade/statistics`,
 
     // Balance endpoints
-    balances: `/api/bot/balances`,
-    portfolio: `/api/bot/portfolio/status`,
+    balances: `${API_BASE_URL}/api/bot/balances`,
+    portfolio: `${API_BASE_URL}/api/bot/portfolio/status`,
 
     // Config endpoints
-    config: `/api/bot/config`,
-    enableBot: `/api/bot/config/enable`,
-    disableBot: `/api/bot/config/disable`,
+    config: `${API_BASE_URL}/api/bot/config`,
+    enableBot: `${API_BASE_URL}/api/bot/config/enable`,
+    disableBot: `${API_BASE_URL}/api/bot/config/disable`,
 
     // Safety endpoints
-    safetyStatus: `/api/bot/safety/status`,
-    health: `/api/bot/health`,
-    emergencyPause: `/api/bot/emergency/pause`
+    safetyStatus: `${API_BASE_URL}/api/bot/safety/status`,
+    health: `${API_BASE_URL}/api/bot/health`,
+    emergencyPause: `${API_BASE_URL}/api/bot/emergency/pause`
 };
 
 async function testBotAPI() {
@@ -60,11 +60,11 @@ async function testBotAPI() {
 
             let response;
             if (method === 'GET') {
-                response = await api.get(url);
+                response = await axios.get(url);
             } else if (method === 'POST') {
-                response = await api.post(url, data);
+                response = await axios.post(url, data);
             } else if (method === 'PUT') {
-                response = await api.put(url, data);
+                response = await axios.put(url, data);
             }
 
             if (response.status === expectedStatus) {
