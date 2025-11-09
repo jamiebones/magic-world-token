@@ -9,6 +9,9 @@ typechain-types/
 .env
 .env.local
 .env.production
+api/.env
+api/.env.local
+api/.env.production
 
 # Sensitive wallet data
 wallets.csv
@@ -30,6 +33,7 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+.history/
 
 # Build outputs
 dist/
