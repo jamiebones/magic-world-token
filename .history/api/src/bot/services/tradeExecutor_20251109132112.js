@@ -414,48 +414,25 @@ class TradeExecutor {
 
     /**
      * Estimate swap output (dry run without executing)
-     * Uses V3 pool price to calculate expected output
      * @param {number} amountIn - Input amount
      * @param {boolean} isBuy - true for BUY (BNB→MWT), false for SELL (MWT→BNB)
      * @returns {Promise<Object>} Estimated output
      */
     async estimateSwapOutput(amountIn, isBuy) {
         try {
-            // Get current price from V3 pool
-            const prices = await this.priceOracle.getAllPrices();
-            const mwtBnbPrice = prices.mwtBnb; // MWT price in BNB
+            const path = isBuy
+                ? [this.WBNB, process.env.TOKEN_CONTRACT_ADDRESS]  // BNB → MWT
+                : [process.env.TOKEN_CONTRACT_ADDRESS, this.WBNB]; // MWT → BNB
 
-            let amountOut;
-            let inputToken;
-            let outputToken;
-
-            if (isBuy) {
-                // BUY: BNB → MWT
-                // If we spend X BNB, we get X / mwtBnbPrice MWT
-                amountOut = amountIn / mwtBnbPrice;
-                inputToken = 'BNB';
-                outputToken = 'MWT';
-            } else {
-                // SELL: MWT → BNB
-                // If we sell X MWT, we get X * mwtBnbPrice BNB
-                amountOut = amountIn * mwtBnbPrice;
-                inputToken = 'MWT';
-                outputToken = 'BNB';
-            }
-
-            // Apply 0.25% fee (PancakeSwap V3 fee tier)
-            const feeMultiplier = 0.9975; // 1 - 0.0025
-            amountOut = amountOut * feeMultiplier;
+            const amountInWei = ethers.parseEther(amountIn.toString());
+            const amounts = await this.router.getAmountsOut(amountInWei, path);
 
             return {
-                amountIn: amountIn.toString(),
-                amountOut: amountOut.toString(),
-                price: isBuy ? mwtBnbPrice : (1 / mwtBnbPrice),
-                inputToken,
-                outputToken,
-                feePercent: 0.25,
-                poolType: 'V3',
-                priceImpact: 0 // V3 price impact would require more complex calculation
+                amountIn: ethers.formatEther(amounts[0]),
+                amountOut: ethers.formatEther(amounts[1]),
+                path,
+                inputToken: isBuy ? 'BNB' : 'MWT',
+                outputToken: isBuy ? 'MWT' : 'BNB'
             };
 
         } catch (error) {
