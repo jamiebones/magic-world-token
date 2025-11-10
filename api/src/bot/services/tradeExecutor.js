@@ -130,10 +130,10 @@ class TradeExecutor {
 
             // 9. Execute swap using multicall for better error handling
             logger.info(`📤 Sending V3 swap transaction...`);
-            
+
             const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
             const refundData = this.router.interface.encodeFunctionData('refundETH', []);
-            
+
             const tx = await this.router.multicall(
                 deadline, // Pass deadline as first parameter
                 [swapData, refundData],
@@ -143,7 +143,7 @@ class TradeExecutor {
                     gasLimit: gasLimit + (gasLimit * 20n / 100n), // Add 20% buffer
                     nonce
                 }
-            );            logger.info(`📤 Transaction sent: ${tx.hash}`);
+            ); logger.info(`📤 Transaction sent: ${tx.hash}`);
 
             // 10. Wait for confirmation
             logger.info(`⏳ Waiting for confirmation...`);
@@ -392,7 +392,7 @@ class TradeExecutor {
 
             // 10. Execute swap using multicall (swap + unwrap WBNB to BNB)
             logger.info(`📤 Sending V3 swap transaction...`);
-            
+
             const swapData = this.router.interface.encodeFunctionData('exactInputSingle', [params]);
             // Use unwrapWETH9 with 2 parameters: (amountMinimum, recipient)
             const unwrapData = this.router.interface.encodeFunctionData('unwrapWETH9(uint256,address)', [
@@ -408,7 +408,7 @@ class TradeExecutor {
                     gasLimit: gasLimit + (gasLimit * 20n / 100n), // Add 20% buffer
                     nonce
                 }
-            );            logger.info(`📤 Transaction sent: ${tx.hash}`);
+            ); logger.info(`📤 Transaction sent: ${tx.hash}`);
 
             // 11. Wait for confirmation
             logger.info(`⏳ Waiting for confirmation...`);

@@ -554,6 +554,24 @@ router.post('/trade/execute', checkBotEnabled, async (req, res) => {
             });
         }
 
+        // Validate minimum trade amounts to prevent nonsensical trades
+        const MIN_BNB_AMOUNT = 0.001; // Minimum 0.001 BNB for BUY
+        const MIN_MWT_AMOUNT = 100;   // Minimum 100 MWT for SELL
+        
+        if (action === 'BUY' && amount < MIN_BNB_AMOUNT) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid BUY amount. Minimum is ${MIN_BNB_AMOUNT} BNB`
+            });
+        }
+        
+        if (action === 'SELL' && amount < MIN_MWT_AMOUNT) {
+            return res.status(400).json({
+                success: false,
+                error: `Invalid SELL amount. Minimum is ${MIN_MWT_AMOUNT} MWT`
+            });
+        }
+
         // Check daily limits
         const limitsCheck = await req.botConfig.checkDailyLimits(Trade);
         if (limitsCheck.exceeded) {
