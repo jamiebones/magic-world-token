@@ -13,7 +13,9 @@ module.exports = {
                 enabled: true,
                 runs: 200,
             },
-            viaIR: true, // Enable via-IR for better optimization
+            // viaIR disabled for better debugging and view function compatibility
+            // Enable only if contract size exceeds 24KB limit
+            viaIR: false,
         },
     },
     networks: {

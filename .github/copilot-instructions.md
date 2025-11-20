@@ -1112,3 +1112,412 @@ const navLinks: NavLink[] = [
 **Phase 9: Documentation (Day 19)** 44. Add inline code comments 45. Create user guide 46. Document admin functions 47. Create troubleshooting guide
 
 **Phase 10: Deployment (Day 20)** 48. Deploy to production 49. Monitor for issues 50. Collect user feedback 51. Iterate based on feedback
+
+---
+
+## MWG Order Book System
+
+### Overview
+
+Order book system for clients to exchange MWG tokens for BNB without AMM slippage. Admin pays clients with MWG, clients receive BNB at agreed rates.
+
+### Core Flow
+
+**Primary Use Case: Admin Pays Client**
+1. Client creates BUY order (deposits BNB, wants MWG)
+2. Admin sees order in dashboard
+3. Admin fills order (sends MWG, receives BNB)
+4. Atomic swap executed (client gets MWG, admin gets BNB)
+
+### Implementation Status
+
+#### Phase 1: Smart Contract Development (Days 1-2) - ✅ COMPLETED
+
+**Task 1.1: Create MWGOrderBook.sol** - ✅ COMPLETED
+- Location: `contracts/MWGOrderBook.sol`
+- Features:
+  - ✅ Order struct with all necessary fields (including feeAtCreation for fee protection)
+  - ✅ Buy/Sell order creation functions (anyone can create)
+  - ✅ Order filling (partial and full fills supported)
+  - ✅ Order cancellation with fund refunds
+  - ✅ Order expiration handling (1-hour grace period)
+  - ✅ Fee mechanism (0-10% in basis points, MWG fees burned, BNB fees to recipient)
+  - ✅ Events for all actions (OrderCreated, OrderFilled, OrderCancelled, WithdrawalClaimed)
+- Key Functions:
+  - ✅ `createBuyOrder(uint256 mwgAmount, uint256 pricePerMWG, uint256 expirySeconds) external payable`
+  - ✅ `createSellOrder(uint256 mwgAmount, uint256 pricePerMWG, uint256 expirySeconds) external`
+  - ✅ `fillBuyOrder(uint256 orderId, uint256 mwgAmount) external`
+  - ✅ `fillSellOrder(uint256 orderId, uint256 mwgAmount) external payable`
+  - ✅ `cancelOrder(uint256 orderId) external`
+  - ✅ `getActiveOrders(uint256 offset, uint256 limit) external view` (paginated max 100)
+  - ✅ `getUserOrders(address user) external view returns (uint256[] memory)`
+  - ✅ `withdraw() external` (pull-over-push pattern)
+
+**Task 1.2: Security Features** - ✅ COMPLETED
+- ✅ Reentrancy guards (OpenZeppelin ReentrancyGuard)
+- ✅ Access control (ADMIN_ROLE, PAUSE_ROLE)
+- ✅ Minimum order amounts (100 MWG, 0.0001 BNB)
+- ✅ Maximum order expiration (30 days)
+- ✅ Safe math operations (Solidity 0.8.20)
+- ✅ Input validation throughout
+- ✅ CEI pattern enforced (Checks-Effects-Interactions)
+- ✅ Pull-over-push pattern for BNB transfers (prevents locked funds)
+- ✅ Self-fill prevention
+- ✅ Fee protection (stored at order creation)
+- ✅ Rounding exploit prevention
+- ✅ DOS prevention (pagination)
+- ✅ Grief attack prevention (1-hour grace period)
+- ✅ MWG fee burning to dead address (0x...dEaD)
+
+**Task 1.3: Testing** - ✅ COMPLETED
+- Location: `test/MWGOrderBook.test.js`
+- Test Coverage: 54 tests across 12 categories (100% pass rate)
+- Test Cases:
+  - ✅ Create buy order with BNB deposit
+  - ✅ Create sell order with MWG deposit
+  - ✅ Fill buy order successfully (complete & partial)
+  - ✅ Fill sell order successfully (MWG fee burning validated)
+  - ✅ Partial order fills (multiple fills on same order)
+  - ✅ Cancel active order (BNB/MWG refunds)
+  - ✅ Prevent double filling
+  - ✅ Order expiration (with grace period testing)
+  - ✅ Insufficient balance errors
+  - ✅ Price calculation accuracy
+  - ✅ Event emissions (all events tested)
+  - ✅ Access control (admin functions)
+  - ✅ Self-fill prevention
+  - ✅ Fee change protection (feeAtCreation)
+  - ✅ Pull-over-push withdrawal pattern
+  - ✅ Rounding to zero prevention
+  - ✅ Pagination DOS prevention
+
+**Task 1.4: Deployment Script** - ✅ COMPLETED
+- Location: `scripts/deploy-orderbook.js`, `scripts/verify-orderbook.js`
+- Script Actions:
+  - ✅ Deploy MWGOrderBook contract
+  - ✅ Set MWG token address (from deployment files)
+  - ✅ Configure minimum order amounts
+  - ✅ Set fee parameters (0% initially)
+  - ✅ Grant roles from environment variables (ORDER_BOOK_ADMIN_ADDRESS, ORDER_BOOK_PAUSE_ADDRESS)
+  - ✅ Revoke deployer permissions (security)
+  - ✅ Auto-verify on BSCScan
+  - ✅ Save deployment info to `deployments/orderbook-{network}.json`
+
+**Phase 1 Deliverables:**
+- ✅ MWGOrderBook.sol contract (production-ready with all security features)
+- ✅ Complete test suite (54 tests, 100% pass rate)
+- ✅ Deployment script with role management
+- ✅ Contract deployed to BSC testnet: `0xeD32ec534306c2474e2110EF0B1E79e655f45dDA`
+- ⏳ Contract deployed to BSC mainnet (pending)
+- ⏳ Contract verified on BSCScan (API issues, can verify manually)
+
+---
+
+#### Phase 2: Backend API Development (Days 3-4) - ❌ NOT STARTED
+
+**Task 2.1: Database Models** - ❌
+- Location: `api/src/orderbook/models/`
+- ❌ Order Model (`Order.js`)
+  - Fields: orderId, txHash, user, orderType, mwgAmount, bnbAmount, price, filled, remaining, status, createdAt, expiresAt, fills[]
+- ❌ Trade Model (`Trade.js`)
+  - Fields: tradeId, orderId, buyer, seller, mwgAmount, bnbAmount, price, txHash, blockNumber, timestamp
+
+**Task 2.2: Order Book Service** - ❌
+- Location: `api/src/orderbook/services/orderBookService.js`
+- ❌ OrderBookService class
+- Methods:
+  - ❌ `createBuyOrder(userAddress, mwgAmount, pricePerMWG, expiryHours)`
+  - ❌ `createSellOrder(adminAddress, mwgAmount, pricePerMWG, expiryHours)`
+  - ❌ `fillBuyOrder(orderId, mwgAmount, fillerAddress)`
+  - ❌ `fillSellOrder(orderId, mwgAmount, fillerAddress)`
+  - ❌ `cancelOrder(orderId, userAddress)`
+  - ❌ `getOrder(orderId)`
+  - ❌ `getUserOrders(userAddress)`
+  - ❌ `getActiveOrders(orderType)`
+  - ❌ `getBestBuyPrice()`
+  - ❌ `getBestSellPrice()`
+  - ❌ `getOrderBookDepth()`
+  - ❌ `getOrderBookStats()`
+
+**Task 2.3: Event Listener Service** - ❌
+- Location: `api/src/orderbook/services/eventListener.js`
+- ❌ OrderBookEventListener class
+- ❌ Listen to OrderCreated events
+- ❌ Listen to OrderFilled events
+- ❌ Listen to OrderCancelled events
+- ❌ Sync historical orders
+
+**Task 2.4: API Routes** - ❌
+- Location: `api/src/routes/orderbook.js`
+- Public Endpoints:
+  - ❌ `GET /api/orderbook/orders` - Get all active orders
+  - ❌ `GET /api/orderbook/orders/:id` - Get specific order
+  - ❌ `GET /api/orderbook/best-prices` - Get best bid/ask
+  - ❌ `GET /api/orderbook/depth` - Get order book depth
+  - ❌ `GET /api/orderbook/trades` - Get recent trades
+  - ❌ `GET /api/orderbook/stats` - Get statistics
+- User Endpoints:
+  - ❌ `POST /api/orderbook/buy-order` - Create buy order
+  - ❌ `GET /api/orderbook/my-orders` - Get user's orders
+  - ❌ `POST /api/orderbook/cancel/:id` - Cancel order
+- Admin Endpoints:
+  - ❌ `POST /api/orderbook/sell-order` - Create sell order
+  - ❌ `POST /api/orderbook/fill-buy/:id` - Fill buy order
+  - ❌ `POST /api/orderbook/admin/orders` - Get all orders
+  - ❌ `POST /api/orderbook/admin/emergency-cancel/:id` - Force cancel
+  - ❌ `GET /api/orderbook/admin/analytics` - Detailed analytics
+
+**Task 2.5: Contract Integration** - ❌
+- Location: `api/src/orderbook/contracts/`
+- ❌ `MWGOrderBook.json` - Contract ABI
+- ❌ `orderBookContract.js` - Contract instance & helpers
+- ❌ Gas estimation helpers
+
+**Phase 2 Deliverables:**
+- ❌ Order and Trade models
+- ❌ OrderBookService class
+- ❌ Event listener service
+- ❌ Complete API routes
+- ❌ Contract integration helpers
+- ❌ API documentation (Swagger)
+
+---
+
+#### Phase 3: Frontend Development (Days 5-7) - ❌ NOT STARTED
+
+**Task 3.1: Order Book Page Structure** - ❌
+- Location: `frontend/src/app/orderbook/`
+- Pages:
+  - ❌ `/orderbook` - Main order book view
+  - ❌ `/orderbook/create` - Create buy order (client)
+  - ❌ `/orderbook/my-orders` - User's orders
+  - ❌ `/orderbook/trades` - Trade history
+  - ❌ `/orderbook/admin` - Admin management (protected)
+
+**Task 3.2: Shared Components** - ❌
+- Location: `frontend/src/components/orderbook/`
+- ❌ `OrderBookDisplay.tsx` - Visual order book
+- ❌ `CreateBuyOrderForm.tsx` - Client creates buy order
+- ❌ `OrderCard.tsx` - Display single order
+- ❌ `FillOrderModal.tsx` - Admin fills order
+- ❌ `TradeHistoryTable.tsx` - Display executed trades
+
+**Task 3.3: Custom Hooks** - ❌
+- Location: `frontend/src/hooks/orderbook/`
+- ❌ `useOrderBook.ts` - Order book data hooks
+- ❌ `useOrderBookActions.ts` - Transaction hooks
+- ❌ `useOrderBookEvents.ts` - Event listeners
+
+**Task 3.4: Page Implementation** - ❌
+- ❌ `/orderbook` - Main page
+- ❌ `/orderbook/create` - Create buy order page
+- ❌ `/orderbook/my-orders` - User orders page
+- ❌ `/orderbook/admin` - Admin management page
+
+**Task 3.5: Real-time Updates** - ❌
+- ❌ WebSocket or polling implementation
+- ❌ New orders notifications
+- ❌ Order fills notifications
+- ❌ Price change updates
+
+**Phase 3 Deliverables:**
+- ❌ All page components
+- ❌ All shared components
+- ❌ Custom hooks
+- ❌ Real-time updates
+- ❌ Mobile responsive design
+- ❌ Loading states & error handling
+
+---
+
+#### Phase 4: Integration & Testing (Day 8) - ❌ NOT STARTED
+
+**Task 4.1: End-to-End Testing** - ❌
+- ❌ Scenario 1: Client creates & admin fills
+- ❌ Scenario 2: Admin creates & client fills
+- ❌ Scenario 3: Partial fills
+- ❌ Scenario 4: Order cancellation
+- ❌ Scenario 5: Order expiration
+
+**Task 4.2: Security Testing** - ❌
+- ❌ Reentrancy attack prevention
+- ❌ Integer overflow/underflow
+- ❌ Unauthorized access tests
+- ❌ Double-spend prevention
+- ❌ Front-running mitigation
+
+**Task 4.3: Performance Testing** - ❌
+- ❌ Order book with 1000+ orders
+- ❌ Multiple simultaneous fills
+- ❌ Event listener under load
+- ❌ API response times
+- ❌ Frontend rendering performance
+
+**Phase 4 Deliverables:**
+- ❌ All test scenarios passed
+- ❌ Security audit completed
+- ❌ Performance benchmarks met
+
+---
+
+#### Phase 5: Deployment & Documentation (Day 9) - ❌ NOT STARTED
+
+**Task 5.1: Smart Contract Deployment** - ❌
+- ❌ Deploy to BSC testnet
+- ❌ Verify on BSCScan (testnet)
+- ❌ Integration testing
+- ❌ Deploy to BSC mainnet
+- ❌ Verify on BSCScan (mainnet)
+
+**Task 5.2: Backend Deployment** - ❌
+- ❌ Add contract ABI
+- ❌ Update environment variables
+- ❌ Deploy to Railway
+- ❌ Start event listener service
+- ❌ Verify API endpoints
+
+**Task 5.3: Frontend Deployment** - ❌
+- ❌ Update contract addresses
+- ❌ Build production bundle
+- ❌ Deploy to hosting
+- ❌ Test on production
+
+**Task 5.4: Documentation** - ❌
+- ❌ Client user guide
+- ❌ Admin user guide
+- ❌ Developer documentation
+- ❌ API documentation
+
+**Phase 5 Deliverables:**
+- ❌ Contracts deployed to mainnet
+- ❌ Backend deployed and running
+- ❌ Frontend deployed and accessible
+- ❌ Complete documentation
+
+---
+
+#### Phase 6: Monitoring & Optimization (Day 10) - ❌ NOT STARTED
+
+**Task 6.1: Monitoring Setup** - ❌
+- ❌ Smart contract monitoring
+- ❌ Backend monitoring
+- ❌ Frontend monitoring
+
+**Task 6.2: Analytics Dashboard** - ❌
+- ❌ Order metrics
+- ❌ Trade volume tracking
+- ❌ Price trend analysis
+- ❌ User activity monitoring
+
+**Task 6.3: Optimization** - ❌
+- ❌ Gas optimization
+- ❌ Database optimization
+- ❌ Frontend optimization
+
+**Phase 6 Deliverables:**
+- ❌ Monitoring dashboards active
+- ❌ Analytics tracking
+- ❌ Performance optimizations applied
+
+---
+
+### File Structure
+
+```
+contracts/
+├── MWGOrderBook.sol                    # ✅ CREATED
+└── interfaces/
+    └── IMWGOrderBook.sol               # ⏳ PENDING
+
+scripts/
+├── deploy-orderbook.js                 # ✅ CREATED
+└── verify-orderbook.js                 # ✅ CREATED
+
+test/
+└── MWGOrderBook.test.js                # ✅ CREATED (54 tests passing)
+
+deployments/
+└── orderbook-bscTestnet.json           # ✅ CREATED
+
+api/src/orderbook/
+├── models/
+│   ├── Order.js                        # ❌ NOT CREATED
+│   └── Trade.js                        # ❌ NOT CREATED
+├── services/
+│   ├── orderBookService.js             # ❌ NOT CREATED
+│   └── eventListener.js                # ❌ NOT CREATED
+├── routes/
+│   └── orderbook.js                    # ❌ NOT CREATED
+└── contracts/
+    ├── MWGOrderBook.json               # ❌ NOT CREATED
+    └── orderBookContract.js            # ❌ NOT CREATED
+
+frontend/src/
+├── app/orderbook/
+│   ├── page.tsx                        # ❌ NOT CREATED
+│   ├── create/
+│   │   └── page.tsx                    # ❌ NOT CREATED
+│   ├── my-orders/
+│   │   └── page.tsx                    # ❌ NOT CREATED
+│   ├── trades/
+│   │   └── page.tsx                    # ❌ NOT CREATED
+│   └── admin/
+│       └── page.tsx                    # ❌ NOT CREATED
+├── components/orderbook/
+│   ├── OrderBookDisplay.tsx            # ❌ NOT CREATED
+│   ├── CreateBuyOrderForm.tsx          # ❌ NOT CREATED
+│   ├── OrderCard.tsx                   # ❌ NOT CREATED
+│   ├── FillOrderModal.tsx              # ❌ NOT CREATED
+│   └── TradeHistoryTable.tsx           # ❌ NOT CREATED
+└── hooks/orderbook/
+    ├── useOrderBook.ts                 # ❌ NOT CREATED
+    ├── useOrderBookActions.ts          # ❌ NOT CREATED
+    └── useOrderBookEvents.ts           # ❌ NOT CREATED
+
+docs/
+└── ORDERBOOK_IMPLEMENTATION_PLAN.md    # ✅ CREATED
+```
+
+### Success Criteria
+
+**Smart Contract:**
+- ❌ Deployed to BSC mainnet
+- ❌ Verified on BSCScan
+- ❌ All tests passing
+- ❌ Security audit clean
+- ❌ Gas costs optimized
+
+**Backend:**
+- ❌ Event listener syncing in real-time
+- ❌ API response time < 200ms
+- ❌ 99.9% uptime
+- ❌ All endpoints documented
+- ❌ Error handling robust
+
+**Frontend:**
+- ❌ Mobile responsive
+- ❌ Intuitive UX
+- ❌ Fast load times (< 2s)
+- ❌ Real-time updates working
+- ❌ Transaction confirmations clear
+
+**Business Goals:**
+- ❌ Zero slippage payments
+- ❌ Transparent pricing
+- ❌ Client self-service enabled
+- ❌ Admin workflow streamlined
+- ❌ Cost savings vs AMM documented
+
+---
+
+**Last Updated:** November 20, 2025  
+**Overall Progress:** 16.7% (1/6 phases complete)  
+**Current Phase:** Phase 1 - ✅ COMPLETED  
+**Next Task:** Phase 2 - Backend API Development
+
+**Phase 1 Summary:**
+- ✅ Smart contract created with all security features (CEI, pull-over-push, self-fill prevention, fee protection, pagination, grief prevention)
+- ✅ 54 tests passing (100% pass rate)
+- ✅ Deployed to BSC Testnet: `0xeD32ec534306c2474e2110EF0B1E79e655f45dDA`
+- ✅ Admin permissions properly configured and deployer revoked
+- ⏳ Contract verification pending (BSCScan API issues)
