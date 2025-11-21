@@ -1,6 +1,11 @@
 import { getDefaultConfig } from '@rainbow-me/rainbowkit';
 import { bsc, bscTestnet } from 'wagmi/chains';
 import { http } from 'viem';
+import EventEmitter from 'events';
+
+// Increase max listeners to prevent memory leak warnings
+// This is needed because we have multiple event watchers across different pages
+EventEmitter.defaultMaxListeners = 20;
 
 // Configure chains with custom RPC URLs for better reliability
 const customBscTestnet = {

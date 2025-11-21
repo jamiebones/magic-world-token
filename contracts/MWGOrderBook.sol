@@ -661,7 +661,7 @@ contract MWGOrderBook is ReentrancyGuard, Pausable, AccessControl {
         
         bestPrice = type(uint256).max;
         uint256 i;
-        for (= 0; i < activeSellOrders.length; i++) {
+        for (i = 0; i < activeSellOrders.length; i++) {
             Order memory order = orders[activeSellOrders[i]];
             if (order.price < bestPrice) {
                 bestPrice = order.price;

@@ -5,6 +5,7 @@ export const CONTRACT_ADDRESSES = {
   PARTNER_VAULT: process.env.NEXT_PUBLIC_PARTNER_VAULT_ADDRESS as `0x${string}`,
   FARMING_POOL: process.env.NEXT_PUBLIC_FARMING_POOL_ADDRESS as `0x${string}`,
   MWG_BNB_POOL: process.env.NEXT_PUBLIC_MWG_BNB_POOL_ADDRESS as `0x${string}`,
+  ORDER_BOOK: process.env.NEXT_PUBLIC_ORDER_BOOK_ADDRESS as `0x${string}`,
 } as const;
 
 // Debug logging
@@ -15,6 +16,7 @@ if (typeof window !== 'undefined') {
     PARTNER_VAULT: CONTRACT_ADDRESSES.PARTNER_VAULT,
     FARMING_POOL: CONTRACT_ADDRESSES.FARMING_POOL,
     MWG_BNB_POOL: CONTRACT_ADDRESSES.MWG_BNB_POOL,
+    ORDER_BOOK: CONTRACT_ADDRESSES.ORDER_BOOK,
   });
 }
 
@@ -79,5 +81,22 @@ export const FARMING_CONFIG = {
     { days: 90, multiplier: 1250, label: "3 Months", boost: "1.25x" },
     { days: 180, multiplier: 1500, label: "6 Months", boost: "1.5x" },
     { days: 365, multiplier: 2000, label: "1 Year", boost: "2.0x" },
+  ],
+} as const;
+
+// Order Book Configuration
+export const ORDER_BOOK_CONFIG = {
+  MIN_MWG_AMOUNT: BigInt(100) * BigInt(10) ** BigInt(18), // 100 MWG
+  MIN_BNB_AMOUNT: BigInt("100000000000000"), // 0.0001 BNB
+  MAX_EXPIRY: BigInt(2592000), // 30 days in seconds
+  DEAD_ADDRESS: "0x000000000000000000000000000000000000dEaD" as `0x${string}`,
+  PAGINATION_LIMIT: 100,
+  EXPIRY_PRESETS: [
+    { label: "1 Hour", seconds: 3600 },
+    { label: "6 Hours", seconds: 21600 },
+    { label: "24 Hours", seconds: 86400 },
+    { label: "3 Days", seconds: 259200 },
+    { label: "7 Days", seconds: 604800 },
+    { label: "30 Days", seconds: 2592000 },
   ],
 } as const;
