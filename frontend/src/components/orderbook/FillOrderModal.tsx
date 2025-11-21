@@ -1,10 +1,13 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { formatUnits, parseUnits } from "viem";
+import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
 import type { Order } from "@/types/orderbook";
 import { OrderType, ORDER_TYPE_LABELS } from "@/types/orderbook";
+import { useMWGBalance, useMWGAllowance, useApproveMWG } from "@/hooks/orderbook/useOrderBookActions";
+import { CONTRACT_ADDRESSES } from "@/config/contracts";
 
 export interface FillOrderModalProps {
   order: Order | null;
@@ -21,12 +24,29 @@ export function FillOrderModal({
   onFill,
   isPending = false,
 }: FillOrderModalProps) {
+  const { address } = useAccount();
   const [fillAmount, setFillAmount] = useState("");
+  
+  // For buy orders: check MWG balance and allowance
+  const { balance: mwgBalance, isLoading: isLoadingBalance } = useMWGBalance(address);
+  const { allowance: mwgAllowance, refetch: refetchAllowance } = useMWGAllowance(address, CONTRACT_ADDRESSES.ORDER_BOOK);
+  const { approve, isPending: isApproving, isSuccess: isApproved } = useApproveMWG();
 
   if (!isOpen || !order) return null;
 
   const isBuyOrder = order.orderType === 0;
   const maxFill = order.remaining;
+
+  // Refetch allowance when approval succeeds
+  useEffect(() => {
+    if (isApproved) {
+      // Wait a bit for blockchain to update, then refetch
+      const timer = setTimeout(() => {
+        refetchAllowance();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [isApproved, refetchAllowance]);
 
   const calculateRequiredAmount = () => {
     if (!fillAmount) return BigInt(0);
@@ -40,6 +60,46 @@ export function FillOrderModal({
   };
 
   const requiredAmount = calculateRequiredAmount();
+
+  // Check if user needs to approve MWG for buy orders
+  const fillAmountBigInt = fillAmount ? parseUnits(fillAmount, 18) : BigInt(0);
+  const needsApproval = isBuyOrder && mwgAllowance !== undefined && fillAmountBigInt > mwgAllowance;
+  // Only check balance if we have the balance data (undefined means still loading)
+  const hasInsufficientBalance = isBuyOrder && mwgBalance !== undefined && fillAmountBigInt > BigInt(0) && fillAmountBigInt > mwgBalance;
+
+  // Debug logging
+  if (isBuyOrder && fillAmount) {
+    console.log('=== Fill Buy Order Debug ===');
+    console.log('Address:', address);
+    console.log('Fill Amount:', fillAmount, '/', formatUnits(fillAmountBigInt, 18));
+    console.log('MWG Balance (raw):', mwgBalance);
+    console.log('MWG Balance:', mwgBalance !== undefined ? formatUnits(mwgBalance, 18) : 'undefined');
+    console.log('Is Loading Balance:', isLoadingBalance);
+    console.log('MWG Allowance:', mwgAllowance ? formatUnits(mwgAllowance, 18) : 'undefined');
+    console.log('Needs Approval:', needsApproval);
+    console.log('Has Insufficient Balance:', hasInsufficientBalance);
+    console.log('Is Approving:', isApproving);
+    console.log('Is Pending:', isPending);
+    console.log('Is Approved (success):', isApproved);
+    console.log('---');
+    console.log('Show Approve Button?', needsApproval && !isApproving);
+    console.log('Fill Order Button Disabled?', isPending || !fillAmount || hasInsufficientBalance || (isBuyOrder && needsApproval));
+  }
+
+  const handleApprove = async () => {
+    try {
+      // Approve max amount for convenience
+      const maxAmount = BigInt("0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff");
+      approve({ 
+        spender: CONTRACT_ADDRESSES.ORDER_BOOK, 
+        amount: maxAmount 
+      });
+      toast.success("Approval transaction sent!");
+    } catch (error) {
+      console.error("Approval error:", error);
+      toast.error("Failed to approve MWG tokens");
+    }
+  };
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -55,7 +115,15 @@ export function FillOrderModal({
         return;
       }
 
-      const toastId = toast.loading(`Filling ${isBuyOrder ? 'buy' : 'sell'} order...`);
+      if (hasInsufficientBalance) {
+        toast.error("Insufficient MWG balance");
+        return;
+      }
+
+      if (needsApproval) {
+        toast.error("Please approve MWG tokens first");
+        return;
+      }
       
       if (isBuyOrder) {
         // Filling buy order: send MWG, receive BNB
@@ -65,7 +133,6 @@ export function FillOrderModal({
         onFill(order.orderId, amount, requiredAmount);
       }
       
-      toast.success("✅ Order filled successfully!", { id: toastId });
       setFillAmount("");
       onClose();
     } catch (error) {
@@ -115,6 +182,27 @@ export function FillOrderModal({
               <span className="text-gray-400">Available:</span>
               <span className="text-white font-medium">{formatUnits(maxFill, 18)} MWG</span>
             </div>
+            {isBuyOrder && mwgBalance !== undefined && (
+              <>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Your MWG Balance:</span>
+                  <span className={`font-medium ${hasInsufficientBalance ? 'text-red-400' : 'text-white'}`}>
+                    {formatUnits(mwgBalance, 18)} MWG
+                  </span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-400">Approved:</span>
+                  <span className="text-white font-medium">
+                    {mwgAllowance !== undefined 
+                      ? (mwgAllowance >= BigInt("1000000000000000000000000") // Check if it's max approval
+                          ? "Unlimited" 
+                          : formatUnits(mwgAllowance, 18)) + " MWG"
+                      : '...'
+                    }
+                  </span>
+                </div>
+              </>
+            )}
           </div>
 
           {/* Fill Amount */}
@@ -180,19 +268,43 @@ export function FillOrderModal({
             <button
               type="button"
               onClick={onClose}
-              disabled={isPending}
+              disabled={isPending || isApproving}
               className="flex-1 bg-gray-700 hover:bg-gray-600 disabled:bg-gray-800 text-white font-medium py-3 px-4 rounded-lg transition-all disabled:cursor-not-allowed"
             >
               Cancel
             </button>
-            <button
-              type="submit"
-              disabled={isPending || !fillAmount}
-              className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:cursor-not-allowed"
-            >
-              {isPending ? "Processing..." : "Fill Order"}
-            </button>
+            {isBuyOrder && needsApproval && !isApproving ? (
+              <button
+                type="button"
+                onClick={handleApprove}
+                disabled={isApproving}
+                className="flex-1 bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:cursor-not-allowed"
+              >
+                {isApproving ? "Approving..." : "1. Approve MWG"}
+              </button>
+            ) : (
+              <button
+                type="submit"
+                disabled={isPending || !fillAmount || hasInsufficientBalance || (isBuyOrder && needsApproval)}
+                className="flex-1 bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-600 text-white font-bold py-3 px-4 rounded-lg transition-all disabled:cursor-not-allowed"
+                title={hasInsufficientBalance ? `Insufficient MWG balance. You have ${mwgBalance !== undefined ? formatUnits(mwgBalance, 18) : '0'} MWG but need ${fillAmount || '0'} MWG` : ''}
+              >
+                {isPending ? "Processing..." : 
+                 hasInsufficientBalance ? "Insufficient MWG Balance" :
+                 isBuyOrder && needsApproval ? "2. Fill Order" : 
+                 "Fill Order"}
+              </button>
+            )}
           </div>
+          
+          {/* Warning message for insufficient balance */}
+          {isBuyOrder && hasInsufficientBalance && fillAmount && (
+            <div className="mt-2 p-3 bg-red-500/20 border border-red-500/30 rounded-lg">
+              <p className="text-sm text-red-400 text-center">
+                ⚠️ You need {fillAmount} MWG tokens but only have {mwgBalance !== undefined ? formatUnits(mwgBalance, 18) : '0'} MWG
+              </p>
+            </div>
+          )}
         </form>
       </div>
     </div>

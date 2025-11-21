@@ -10,6 +10,21 @@ const { ethers } = require('ethers');
  */
 class PriceOracleV3 {
     constructor() {
+        // Validate required environment variables
+        const required = {
+            BSC_MAINNET_RPC_URL: process.env.BSC_MAINNET_RPC_URL,
+            MWT_BNB_PAIR_ADDRESS: process.env.MWT_BNB_PAIR_ADDRESS,
+            MWT_TOKEN_ADDRESS: process.env.MWT_TOKEN_ADDRESS,
+            WBNB_ADDRESS: process.env.WBNB_ADDRESS,
+            CHAINLINK_BNB_USD_FEED: process.env.CHAINLINK_BNB_USD_FEED,
+            CHAINLINK_BTC_USD_FEED: process.env.CHAINLINK_BTC_USD_FEED
+        };
+
+        const missing = Object.entries(required).filter(([k, v]) => !v).map(([k]) => k);
+        if (missing.length > 0) {
+            throw new Error(`PriceOracleV3: Missing required environment variables: ${missing.join(', ')}`);
+        }
+
         this.provider = new ethers.JsonRpcProvider(process.env.BSC_MAINNET_RPC_URL);
 
         // V3 Pool ABI - minimal for price reading

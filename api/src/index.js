@@ -27,7 +27,8 @@ async function initialize() {
         logger.info('✅ All services initialized successfully!');
 
         // Start the server
-        require('./server');
+        const server = require('./server');
+        return server;
 
     } catch (error) {
         logger.error('❌ Failed to initialize services:', error);
@@ -40,7 +41,11 @@ process.on('uncaughtException', (error) => {
 });
 
 process.on('unhandledRejection', (reason, promise) => {
-    logger.error('Unhandled Rejection at:', promise, 'reason:', reason);
+    logger.error('Unhandled Rejection at:', promise);
+    logger.error('Rejection reason:', reason);
+    if (reason && reason.stack) {
+        logger.error('Stack trace:', reason.stack);
+    }
     process.exit(1);
 });
 

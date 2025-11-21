@@ -11,6 +11,10 @@ const { authMiddleware } = require('./middleware/auth');
 const cronJobsService = require('./services/cronJobs');
 const emailService = require('./services/emailService');
 const walletBalanceMonitor = require('./services/walletBalanceMonitor');
+const { OrderBookEventListener } = require('./services');
+
+// Order book event listener instance
+let orderBookListener = null;
 
 // Import routes
 const tokenRoutes = require('./routes/tokens');
@@ -19,6 +23,7 @@ const healthRoutes = require('./routes/health');
 const adminRoutes = require('./routes/admin');
 const botRoutes = require('./routes/bot');
 const merkleRoutes = require('./routes/merkle');
+const orderbookRoutes = require('./routes/orderbook');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -64,6 +69,9 @@ app.use('/api/bot', botRoutes);
 // Merkle distribution routes (mixed auth - public reads, admin writes)
 app.use('/api/merkle', merkleRoutes);
 
+// Order book routes (public access)
+app.use('/api/orderbook', orderbookRoutes);
+
 // Root endpoint
 app.get('/', (req, res) => {
     res.json({
@@ -77,7 +85,8 @@ app.get('/', (req, res) => {
             tokens: '/api/tokens',
             players: '/api/players',
             bot: '/api/bot',
-            merkle: '/api/merkle'
+            merkle: '/api/merkle',
+            orderbook: '/api/orderbook'
         }
     });
 });
@@ -90,17 +99,25 @@ app.use('*', (req, res) => {
     res.status(404).json({
         error: 'Endpoint not found',
         message: `Cannot ${req.method} ${req.originalUrl}`,
-        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players', '/api/bot', '/api/merkle']
+        availableEndpoints: ['/health', '/api/admin', '/api/tokens', '/api/players', '/api/bot', '/api/merkle', '/api/orderbook']
     });
 });
 
 // Start server
-const server = app.listen(PORT, async () => {
+const server = app.listen(PORT, () => {
     logger.info(`🚀 Magic World Token API server running on port ${PORT}`);
     logger.info(`📚 API Documentation available at http://localhost:${PORT}/api-docs`);
     logger.info(`🌐 Environment: ${process.env.NODE_ENV}`);
     logger.info(`⛓️  Blockchain Network: ${process.env.BLOCKCHAIN_NETWORK}`);
 
+    // Initialize services asynchronously (non-blocking)
+    initializeServices().catch(error => {
+        logger.error('Failed to initialize services:', error);
+    });
+});
+
+// Initialize async services after server starts
+async function initializeServices() {
     // Initialize email service (non-critical - continue if fails)
     try {
         await emailService.initialize();
@@ -122,11 +139,62 @@ const server = app.listen(PORT, async () => {
     } catch (error) {
         logger.error('Failed to initialize cron jobs:', error);
     }
-});
+
+    // Initialize order book event listener (if enabled)
+    if (process.env.ORDERBOOK_ENABLED === 'true') {
+        try {
+            const network = process.env.BLOCKCHAIN_NETWORK || 'bscTestnet';
+            const contractAddress = network === 'bsc'
+                ? process.env.ORDERBOOK_CONTRACT_ADDRESS_MAINNET
+                : process.env.ORDERBOOK_CONTRACT_ADDRESS_TESTNET;
+            const rpcUrl = network === 'bsc'
+                ? process.env.BSC_MAINNET_RPC_URL
+                : process.env.BSC_TESTNET_RPC_URL;
+            const startBlock = network === 'bsc'
+                ? process.env.ORDERBOOK_START_BLOCK_MAINNET || 0
+                : process.env.ORDERBOOK_START_BLOCK_TESTNET || 0;
+
+            if (!contractAddress || contractAddress.trim() === '') {
+                logger.warn('⚠️  Order book contract address not configured, skipping initialization');
+            } else if (!rpcUrl || rpcUrl.trim() === '') {
+                logger.warn('⚠️  RPC URL not configured for order book, skipping initialization');
+                logger.warn(`   Set ${network === 'bsc' ? 'BSC_MAINNET_RPC_URL' : 'BSC_TESTNET_RPC_URL'} in .env`);
+            } else {
+                const config = {
+                    contractAddress,
+                    network,
+                    rpcUrl,
+                    startBlock: parseInt(startBlock, 10),
+                    pollInterval: parseInt(process.env.ORDERBOOK_POLL_INTERVAL || '15000', 10)
+                };
+
+                orderBookListener = OrderBookEventListener.getInstance(config);
+                await orderBookListener.initialize();
+                await orderBookListener.start();
+                logger.info('📖 Order book event listener started successfully');
+            }
+        } catch (error) {
+            logger.error('❌ Failed to initialize order book event listener:', error);
+            logger.warn('⚠️  Order book will continue without real-time event monitoring');
+        }
+    } else {
+        logger.info('ℹ️  Order book event listener disabled (set ORDERBOOK_ENABLED=true to enable)');
+    }
+}
 
 // Graceful shutdown
 const gracefulShutdown = async () => {
     logger.info('Shutting down gracefully...');
+
+    // Stop order book event listener
+    if (orderBookListener) {
+        try {
+            await orderBookListener.stop();
+            logger.info('📖 Order book event listener stopped');
+        } catch (error) {
+            logger.error('Error stopping order book event listener:', error);
+        }
+    }
 
     // Stop cron jobs
     try {

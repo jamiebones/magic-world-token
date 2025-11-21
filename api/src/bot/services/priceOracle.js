@@ -7,6 +7,19 @@ const ChainlinkAggregatorABI = require('../../../contracts/abis/IChainlinkAggreg
 
 class PriceOracle {
     constructor() {
+        // Validate required environment variables
+        const required = {
+            BSC_MAINNET_RPC_URL: process.env.BSC_MAINNET_RPC_URL,
+            MWT_BNB_PAIR_ADDRESS: process.env.MWT_BNB_PAIR_ADDRESS,
+            CHAINLINK_BNB_USD_FEED: process.env.CHAINLINK_BNB_USD_FEED,
+            CHAINLINK_BTC_USD_FEED: process.env.CHAINLINK_BTC_USD_FEED
+        };
+
+        const missing = Object.entries(required).filter(([k, v]) => !v).map(([k]) => k);
+        if (missing.length > 0) {
+            throw new Error(`PriceOracle: Missing required environment variables: ${missing.join(', ')}`);
+        }
+
         // Use BSC Mainnet for production price data
         this.provider = new ethers.JsonRpcProvider(process.env.BSC_MAINNET_RPC_URL);
 

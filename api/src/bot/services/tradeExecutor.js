@@ -9,6 +9,20 @@ const ERC20ABI = require('../../../contracts/MagicWorldToken.json').abi;
 
 class TradeExecutor {
     constructor() {
+        // Validate required environment variables
+        const required = {
+            BSC_MAINNET_RPC_URL: process.env.BSC_MAINNET_RPC_URL,
+            BOT_WALLET_PRIVATE_KEY: process.env.BOT_WALLET_PRIVATE_KEY,
+            PANCAKE_ROUTER_ADDRESS: process.env.PANCAKE_ROUTER_ADDRESS,
+            TOKEN_CONTRACT_ADDRESS: process.env.TOKEN_CONTRACT_ADDRESS,
+            WBNB_ADDRESS: process.env.WBNB_ADDRESS
+        };
+
+        const missing = Object.entries(required).filter(([k, v]) => !v).map(([k]) => k);
+        if (missing.length > 0) {
+            throw new Error(`TradeExecutor: Missing required environment variables: ${missing.join(', ')}`);
+        }
+
         // Use BSC Mainnet for production trading
         this.provider = new ethers.JsonRpcProvider(process.env.BSC_MAINNET_RPC_URL);
 
