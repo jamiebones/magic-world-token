@@ -2,25 +2,22 @@
 
 import Link from "next/link";
 import { useAccount } from "wagmi";
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import toast from "react-hot-toast";
+import { useOrderBookPaused } from "@/hooks/orderbook/useOrderBook";
 import {
-  useOrderBookStats,
-  useBestBuyPrice,
-  useBestSellPrice,
-  useOrderBookPaused,
-  useActiveOrders,
-  useOrder,
-} from "@/hooks/orderbook/useOrderBook";
-import { 
-  useRecentActivity,
-} from "@/hooks/orderbook/useOrderBookEvents";
+  useOrderBookStatsAPI,
+  useActiveOrdersAPI,
+  useBestPricesAPI,
+  useRecentActivityAPI,
+} from "@/hooks/orderbook/useOrderBookAPI";
 import { OrderBookDisplay } from "@/components/orderbook/OrderBookDisplay";
 import { FillOrderModal } from "@/components/orderbook/FillOrderModal";
 import { FarmingStatsCard } from "@/components/farming/FarmingStatsCard";
 import { formatUnits } from "viem";
-import { useState } from "react";
-import { showInfoToast } from "@/hooks/orderbook/useOrderBookToasts";
+
+import { showInfoToast, useOrderBookTransactionToast } from "@/hooks/orderbook/useOrderBookToasts";
 import { useFillBuyOrder, useFillSellOrder } from "@/hooks/orderbook/useOrderBookActions";
 
 // Order type for fill modal
@@ -41,87 +38,92 @@ interface OrderForFill {
 
 export default function OrderBookPage() {
   const { isConnected, address } = useAccount();
-  const { stats, isLoading: isLoadingStats } = useOrderBookStats();
-  const { bestBuy } = useBestBuyPrice();
-  const { bestSell } = useBestSellPrice();
+  const queryClient = useQueryClient();
+  
+  // Use API hooks instead of blockchain hooks for historical data
+  const { data: statsData, isLoading: isLoadingStats } = useOrderBookStatsAPI();
+  const { data: bestPricesData } = useBestPricesAPI();
+  const { data: buyOrdersData, isLoading: isLoadingBuyOrders } = useActiveOrdersAPI(0, 50);
+  const { data: sellOrdersData, isLoading: isLoadingSellOrders } = useActiveOrdersAPI(1, 50);
+  const { data: activityData } = useRecentActivityAPI(10);
+  
+  // Still use blockchain for contract state
   const { isPaused } = useOrderBookPaused();
-  const recentActivity = useRecentActivity(5);
+  
   const [hasShownWelcome, setHasShownWelcome] = useState(false);
   const [selectedOrder, setSelectedOrder] = useState<OrderForFill | null>(null);
   const [showFillModal, setShowFillModal] = useState(false);
 
   // Fill order hooks
-  const { fillBuyOrder, isPending: isFillingBuy } = useFillBuyOrder();
-  const { fillSellOrder, isPending: isFillingSell } = useFillSellOrder();
+  const { fillBuyOrder, isPending: isFillingBuy, isSuccess: isBuyFillSuccess, error: buyFillError } = useFillBuyOrder();
+  const { fillSellOrder, isPending: isFillingSell, isSuccess: isSellFillSuccess, error: sellFillError } = useFillSellOrder();
 
-  // Get active orders from contract (separate buy and sell orders)
-  const { 
-    buyOrders: contractBuyOrders, 
-    sellOrders: contractSellOrders, 
-    totalBuyOrders, 
-    totalSellOrders,
-    isLoading: isLoadingOrders 
-  } = useActiveOrders(0, 50);
+  // Show transaction toasts for fill operations
+  useOrderBookTransactionToast(
+    isFillingBuy,
+    isBuyFillSuccess,
+    buyFillError,
+    "Filling buy order",
+    "✅ Buy order filled successfully!"
+  );
 
-  // Debug logging
+  useOrderBookTransactionToast(
+    isFillingSell,
+    isSellFillSuccess,
+    sellFillError,
+    "Filling sell order",
+    "✅ Sell order filled successfully!"
+  );
+
+  // Refetch data after successful fill
   useEffect(() => {
-    console.log('=== Order Book Page Data ===');
-    console.log('contractBuyOrders:', contractBuyOrders);
-    console.log('contractSellOrders:', contractSellOrders);
-    console.log('totalBuyOrders:', totalBuyOrders);
-    console.log('totalSellOrders:', totalSellOrders);
-    console.log('isLoadingOrders:', isLoadingOrders);
-  }, [contractBuyOrders, contractSellOrders, totalBuyOrders, totalSellOrders, isLoadingOrders]);
+    if (isBuyFillSuccess || isSellFillSuccess) {
+      // Invalidate all orderbook queries to refresh the data
+      queryClient.invalidateQueries({ queryKey: ['orderbook'] });
+    }
+  }, [isBuyFillSuccess, isSellFillSuccess, queryClient]);
+
+  // Extract data from API responses
+  const stats = statsData?.stats;
+  const bestBuy = bestPricesData?.bestBuy?.price ? BigInt(bestPricesData.bestBuy.price) : null;
+  const bestSell = bestPricesData?.bestSell?.price ? BigInt(bestPricesData.bestSell.price) : null;
+  const recentActivity = activityData?.activities || [];
+  const isLoadingOrders = isLoadingBuyOrders || isLoadingSellOrders;
   
-  // Process orders from contract data
+  // Process orders from API data
   const { buyOrders, sellOrders, activeOrderCount } = useMemo(() => {
-    console.log('=== Processing Orders ===');
-    console.log('contractBuyOrders raw:', contractBuyOrders);
-    console.log('contractSellOrders raw:', contractSellOrders);
-    
-    // Orders come directly from contract, already separated
-    const buys = (contractBuyOrders || []).map((order: any) => {
-      console.log('Processing buy order:', order);
-      return {
-        orderId: order.orderId,
-        pricePerMWG: order.price, // Contract uses 'price' field
-        remaining: order.remaining,
-        user: order.user,
-        orderType: 0, // Buy order
-        status: order.status,
-        expiresAt: order.expiresAt,
-        bnbAmount: order.bnbAmount,
-        mwgAmount: order.mwgAmount,
-        filled: order.filled,
-      };
-    });
+    const buys = (buyOrdersData?.orders || []).map((order: any) => ({
+      orderId: BigInt(order.orderId),
+      pricePerMWG: BigInt(order.pricePerMWG),
+      remaining: BigInt(order.remaining || order.mwgAmount),
+      user: order.user as `0x${string}`,
+      orderType: 0,
+      status: order.status,
+      expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
+      bnbAmount: BigInt(order.bnbAmount),
+      mwgAmount: BigInt(order.mwgAmount),
+      filled: BigInt(order.filled || 0),
+    }));
 
-    const sells = (contractSellOrders || []).map((order: any) => {
-      console.log('Processing sell order:', order);
-      return {
-        orderId: order.orderId,
-        pricePerMWG: order.price, // Contract uses 'price' field
-        remaining: order.remaining,
-        user: order.user,
-        orderType: 1, // Sell order
-        status: order.status,
-        expiresAt: order.expiresAt,
-        bnbAmount: order.bnbAmount,
-        mwgAmount: order.mwgAmount,
-        filled: order.filled,
-      };
-    });
-
-    console.log('Processed buys:', buys);
-    console.log('Processed sells:', sells);
-    console.log('Total count:', buys.length + sells.length);
+    const sells = (sellOrdersData?.orders || []).map((order: any) => ({
+      orderId: BigInt(order.orderId),
+      pricePerMWG: BigInt(order.pricePerMWG),
+      remaining: BigInt(order.remaining || order.mwgAmount),
+      user: order.user as `0x${string}`,
+      orderType: 1,
+      status: order.status,
+      expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
+      bnbAmount: BigInt(order.bnbAmount),
+      mwgAmount: BigInt(order.mwgAmount),
+      filled: BigInt(order.filled || 0),
+    }));
 
     return {
       buyOrders: buys,
       sellOrders: sells,
       activeOrderCount: buys.length + sells.length
     };
-  }, [contractBuyOrders, contractSellOrders]);
+  }, [buyOrdersData, sellOrdersData]);
 
   // Handle order click - open fill modal
   const handleOrderClick = (orderId: bigint, orderType: number) => {
@@ -143,19 +145,19 @@ export default function OrderBookPage() {
       if (selectedOrder.orderType === 0) {
         // Filling buy order: send MWG, receive BNB
         await fillBuyOrder({ orderId, mwgAmount });
-        toast.success("Buy order filled successfully!");
+        // Toast handled by useOrderBookTransactionToast
       } else {
         // Filling sell order: send BNB, receive MWG
         if (bnbValue) {
           await fillSellOrder({ orderId, mwgAmount, bnbValue });
-          toast.success("Sell order filled successfully!");
+          // Toast handled by useOrderBookTransactionToast
         }
       }
       setShowFillModal(false);
       setSelectedOrder(null);
     } catch (error) {
       console.error("Fill order error:", error);
-      toast.error("Failed to fill order");
+      // Error toast handled by useOrderBookTransactionToast
     }
   };
 
@@ -178,8 +180,8 @@ export default function OrderBookPage() {
 
   const spread =
     bestBuy && bestSell
-      ? ((Number(formatUnits(bestSell.price, 18)) - Number(formatUnits(bestBuy.price, 18))) /
-          Number(formatUnits(bestBuy.price, 18))) *
+      ? ((Number(formatUnits(bestSell, 18)) - Number(formatUnits(bestBuy, 18))) /
+          Number(formatUnits(bestBuy, 18))) *
         100
       : 0;
 
@@ -266,12 +268,13 @@ export default function OrderBookPage() {
             <OrderBookDisplay
               buyOrders={buyOrders}
               sellOrders={sellOrders}
-              bestBuyPrice={bestBuy?.price}
-              bestSellPrice={bestSell?.price}
+              bestBuyPrice={bestBuy || undefined}
+              bestSellPrice={bestSell || undefined}
               isLoading={isLoadingOrders}
               onOrderClick={(orderId, type) => {
                 handleOrderClick(orderId, type);
               }}
+              connectedAddress={address}
             />
           </div>
 

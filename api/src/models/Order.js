@@ -86,39 +86,39 @@ orderSchema.index({ status: 1, createdAt: -1 });
 orderSchema.index({ orderType: 1, status: 1, pricePerMWG: 1 });
 
 // Virtual for determining if order is expired
-orderSchema.virtual('isExpired').get(function() {
+orderSchema.virtual('isExpired').get(function () {
   return this.status === 0 && new Date() > this.expiresAt;
 });
 
 // Method to update order status
-orderSchema.methods.updateStatus = function(newStatus) {
+orderSchema.methods.updateStatus = function (newStatus) {
   this.status = newStatus;
   this.lastUpdated = Date.now();
   return this.save();
 };
 
 // Method to update filled amount
-orderSchema.methods.updateFilled = function(filledAmount, remainingAmount) {
+orderSchema.methods.updateFilled = function (filledAmount, remainingAmount) {
   this.filled = filledAmount;
   this.remaining = remainingAmount;
   this.lastUpdated = Date.now();
-  
+
   // Auto-update status if fully filled
   if (remainingAmount === '0') {
     this.status = 1; // Filled
   }
-  
+
   return this.save();
 };
 
 // Static method to get active orders
-orderSchema.statics.getActiveOrders = function(orderType = null, limit = 50, offset = 0) {
-  const query = { status: 0 }; // Active only
-  
+orderSchema.statics.getActiveOrders = function (orderType = null, limit = 50, offset = 0) {
+  const query = { status: { $in: [0, 2] } }; // Active (0) and Partially Filled (2)
+
   if (orderType !== null) {
     query.orderType = orderType;
   }
-  
+
   return this.find(query)
     .sort({ createdAt: -1 })
     .limit(limit)
@@ -126,30 +126,30 @@ orderSchema.statics.getActiveOrders = function(orderType = null, limit = 50, off
 };
 
 // Static method to get user orders
-orderSchema.statics.getUserOrders = function(userAddress, status = null) {
+orderSchema.statics.getUserOrders = function (userAddress, status = null) {
   const query = { user: userAddress.toLowerCase() };
-  
+
   if (status !== null) {
     query.status = status;
   }
-  
+
   return this.find(query).sort({ createdAt: -1 });
 };
 
 // Static method to get best buy price (highest bid)
-orderSchema.statics.getBestBuyPrice = function() {
-  return this.findOne({ orderType: 0, status: 0 })
+orderSchema.statics.getBestBuyPrice = function () {
+  return this.findOne({ orderType: 0, status: { $in: [0, 2] } })
     .sort({ pricePerMWG: -1 }); // Highest price first
 };
 
 // Static method to get best sell price (lowest ask)
-orderSchema.statics.getBestSellPrice = function() {
-  return this.findOne({ orderType: 1, status: 0 })
+orderSchema.statics.getBestSellPrice = function () {
+  return this.findOne({ orderType: 1, status: { $in: [0, 2] } })
     .sort({ pricePerMWG: 1 }); // Lowest price first
 };
 
 // Static method to count orders by status
-orderSchema.statics.getOrderStats = async function() {
+orderSchema.statics.getOrderStats = async function () {
   const stats = await this.aggregate([
     {
       $group: {
@@ -160,7 +160,7 @@ orderSchema.statics.getOrderStats = async function() {
       }
     }
   ]);
-  
+
   return stats;
 };
 

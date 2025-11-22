@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import type { Order } from "@/types/orderbook";
 import { OrderType, ORDER_TYPE_LABELS } from "@/types/orderbook";
 import { useMWGBalance, useMWGAllowance, useApproveMWG } from "@/hooks/orderbook/useOrderBookActions";
+import { useOrderBookTransactionToast } from "@/hooks/orderbook/useOrderBookToasts";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 
 export interface FillOrderModalProps {
@@ -30,7 +31,16 @@ export function FillOrderModal({
   // For buy orders: check MWG balance and allowance
   const { balance: mwgBalance, isLoading: isLoadingBalance } = useMWGBalance(address);
   const { allowance: mwgAllowance, refetch: refetchAllowance } = useMWGAllowance(address, CONTRACT_ADDRESSES.ORDER_BOOK);
-  const { approve, isPending: isApproving, isSuccess: isApproved } = useApproveMWG();
+  const { approve, isPending: isApproving, isSuccess: isApproved, error: approveError } = useApproveMWG();
+
+  // Show toast notifications for approval transaction
+  useOrderBookTransactionToast(
+    isApproving,
+    isApproved,
+    approveError,
+    "Approving MWG tokens",
+    "✅ MWG tokens approved successfully!"
+  );
 
   if (!isOpen || !order) return null;
 
@@ -94,10 +104,10 @@ export function FillOrderModal({
         spender: CONTRACT_ADDRESSES.ORDER_BOOK, 
         amount: maxAmount 
       });
-      toast.success("Approval transaction sent!");
+      // Toast handled by transaction lifecycle
     } catch (error) {
       console.error("Approval error:", error);
-      toast.error("Failed to approve MWG tokens");
+      // Error handled by transaction lifecycle
     }
   };
 

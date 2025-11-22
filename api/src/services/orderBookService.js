@@ -7,7 +7,7 @@ class OrderBookService {
      */
     async getActiveOrders(orderType = null, limit = 50, offset = 0) {
         try {
-            const query = { status: 0 }; // Active only
+            const query = { status: { $in: [0, 2] } }; // Active (0) and Partially Filled (2)
 
             if (orderType !== null && (orderType === 0 || orderType === 1)) {
                 query.orderType = orderType;

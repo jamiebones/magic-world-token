@@ -4,6 +4,8 @@ const MWGOrderBookArtifact = require('../../contracts/abis/MWGOrderBook.json');
 const logger = require('../utils/logger');
 
 class OrderBookEventListener {
+  static instance = null;
+
   constructor(config) {
     if (!config) {
       throw new Error('OrderBookEventListener: config is required');
@@ -145,14 +147,15 @@ class OrderBookEventListener {
     });
 
     // OrderFilled event
-    this.contract.on('OrderFilled', async (orderId, filler, mwgAmount, bnbAmount, remaining, event) => {
+    this.contract.on('OrderFilled', async (orderId, fillId, filler, mwgAmount, bnbAmount, newStatus, event) => {
       try {
         await this.handleOrderFilledEvent({
           orderId: orderId.toString(),
+          fillId: fillId.toString(),
           filler,
           mwgAmount: mwgAmount.toString(),
           bnbAmount: bnbAmount.toString(),
-          remaining: remaining.toString(),
+          newStatus: Number(newStatus),
           txHash: event.log.transactionHash,
           blockNumber: event.log.blockNumber
         });
@@ -162,11 +165,13 @@ class OrderBookEventListener {
     });
 
     // OrderCancelled event
-    this.contract.on('OrderCancelled', async (orderId, user, event) => {
+    this.contract.on('OrderCancelled', async (orderId, user, bnbRefund, mwgRefund, event) => {
       try {
         await this.handleOrderCancelledEvent({
           orderId: orderId.toString(),
           user,
+          bnbRefund: bnbRefund.toString(),
+          mwgRefund: mwgRefund.toString(),
           txHash: event.log.transactionHash,
           blockNumber: event.log.blockNumber
         });
@@ -176,12 +181,11 @@ class OrderBookEventListener {
     });
 
     // WithdrawalClaimed event
-    this.contract.on('WithdrawalClaimed', async (user, amount, amountType, event) => {
+    this.contract.on('WithdrawalClaimed', async (user, amount, event) => {
       try {
         await this.handleWithdrawalClaimedEvent({
           user,
           amount: amount.toString(),
-          amountType: Number(amountType),
           txHash: event.log.transactionHash,
           blockNumber: event.log.blockNumber
         });
@@ -276,16 +280,18 @@ class OrderBookEventListener {
       const block = await this.provider.getBlock(eventData.blockNumber);
       const timestamp = new Date(block.timestamp * 1000);
 
-      // Calculate filled amount
+      // Calculate filled and remaining amounts
       const previousFilled = BigInt(order.filled);
       const filledAmount = BigInt(eventData.mwgAmount);
       const totalFilled = (previousFilled + filledAmount).toString();
+      const totalAmount = BigInt(order.mwgAmount);
+      const remaining = (totalAmount - BigInt(totalFilled)).toString();
 
       // Update order
-      await order.updateFilled(totalFilled, eventData.remaining);
+      await order.updateFilled(totalFilled, remaining);
 
       // Create fill record
-      const fillId = `${eventData.orderId}-${eventData.txHash}`;
+      const fillId = `${eventData.orderId}-${eventData.fillId}`;
       const existingFill = await OrderFill.findOne({ fillId });
 
       if (!existingFill) {
@@ -308,11 +314,9 @@ class OrderBookEventListener {
         logger.info(`[OrderBook Fill record saved for Order #${eventData.orderId}`);
       }
 
-      // Update order status if fully filled
-      if (eventData.remaining === '0') {
-        await order.updateStatus(1); // Filled
-        logger.info(`[OrderBook Order #${eventData.orderId} marked as filled`);
-      }
+      // Update order status based on event's newStatus
+      await order.updateStatus(eventData.newStatus);
+      logger.info(`[OrderBook Order #${eventData.orderId} status updated to ${eventData.newStatus}`);
     } catch (error) {
       logger.error(`[OrderBook Error saving OrderFilled #${eventData.orderId}:`, error);
       throw error;
@@ -352,8 +356,8 @@ class OrderBookEventListener {
       const block = await this.provider.getBlock(eventData.blockNumber);
       const timestamp = new Date(block.timestamp * 1000);
 
-      // Determine amount type (0 = MWG, 1 = BNB)
-      const amountType = eventData.amountType === 0 ? 'MWG' : 'BNB';
+      // WithdrawalClaimed only emits for BNB withdrawals (contract uses pull-over-push pattern)
+      const amountType = 'BNB';
 
       // Create withdrawal record
       const withdrawalId = `${eventData.user}-${eventData.txHash}`;
@@ -428,9 +432,6 @@ class OrderBookEventListener {
     return OrderBookEventListener.instance;
   }
 }
-
-// Add static property for singleton
-OrderBookEventListener.instance = null;
 
 module.exports = OrderBookEventListener;
 

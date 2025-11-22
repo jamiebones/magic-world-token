@@ -5,6 +5,7 @@ const distributionFinalizer = require('./distributionFinalizer');
 const emailService = require('./emailService');
 const OrderBookEventListener = require('./eventListener');
 const orderBookService = require('./orderBookService');
+const syncHistoricalEvents = require('./syncHistoricalEvents');
 const walletBalanceMonitor = require('./walletBalanceMonitor');
 
 module.exports = {
@@ -15,5 +16,6 @@ module.exports = {
     emailService,
     OrderBookEventListener,
     orderBookService,
+    syncHistoricalEvents,
     walletBalanceMonitor
 };

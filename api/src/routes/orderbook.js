@@ -101,7 +101,11 @@ router.get('/orders', validatePagination, async (req, res) => {
             parseInt(offset) || 0
         );
 
-        res.json(result);
+
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting orders:', error);
         res.status(500).json({
@@ -156,7 +160,10 @@ router.get('/orders/:orderId', async (req, res) => {
             return res.status(404).json(result);
         }
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting order ${req.params.orderId}:`, error);
         res.status(500).json({
@@ -229,7 +236,10 @@ router.get('/fills', validatePagination, async (req, res) => {
             parseInt(offset) || 0
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting fills:', error);
         res.status(500).json({
@@ -265,7 +275,10 @@ router.get('/fills/:orderId', async (req, res) => {
 
         const result = await orderBookService.getOrderFills(orderId);
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting fills for order ${req.params.orderId}:`, error);
         res.status(500).json({
@@ -316,7 +329,10 @@ router.get('/stats', async (req, res) => {
     try {
         const result = await orderBookService.getOrderBookStats();
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting stats:', error);
         res.status(500).json({
@@ -375,7 +391,10 @@ router.get('/recent-activity', async (req, res) => {
             parseInt(limit) || 20
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting recent activity:', error);
         res.status(500).json({
@@ -432,7 +451,10 @@ router.get('/best-prices', async (req, res) => {
     try {
         const result = await orderBookService.getBestPrices();
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting best prices:', error);
         res.status(500).json({
@@ -492,7 +514,10 @@ router.get('/user/:address/orders', validateAddress, validatePagination, async (
             parseInt(offset) || 0
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting orders for ${req.params.address}:`, error);
         res.status(500).json({
@@ -546,7 +571,10 @@ router.get('/user/:address/fills-as-filler', validateAddress, validatePagination
             parseInt(offset) || 0
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting fills for filler ${req.params.address}:`, error);
         res.status(500).json({
@@ -600,7 +628,10 @@ router.get('/user/:address/fills-as-creator', validateAddress, validatePaginatio
             parseInt(offset) || 0
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting fills for creator ${req.params.address}:`, error);
         res.status(500).json({
@@ -661,7 +692,10 @@ router.get('/user/:address/withdrawals', validateAddress, validatePagination, as
             parseInt(offset) || 0
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error(`[OrderBook API] Error getting withdrawals for ${req.params.address}:`, error);
         res.status(500).json({
@@ -717,7 +751,10 @@ router.post('/admin/search', async (req, res) => {
 
         const result = await orderBookService.searchOrders(criteria);
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error searching orders:', error);
         res.status(500).json({
@@ -775,7 +812,10 @@ router.get('/admin/analytics', async (req, res) => {
             endDate || null
         );
 
-        res.json(result);
+        res.json({
+            success: true,
+            data: result,
+        });
     } catch (error) {
         console.error('[OrderBook API] Error getting analytics:', error);
         res.status(500).json({
@@ -856,11 +896,13 @@ router.post('/admin/sync', async (req, res) => {
 
         res.json({
             success: true,
-            message: 'Historical sync started in background',
-            config: {
-                fromBlock: config.fromBlock,
-                toBlock: config.toBlock,
-                batchSize: config.batchSize
+            data: {
+                message: 'Historical sync started in background',
+                config: {
+                    fromBlock: config.fromBlock,
+                    toBlock: config.toBlock,
+                    batchSize: config.batchSize
+                }
             }
         });
     } catch (error) {

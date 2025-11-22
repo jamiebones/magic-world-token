@@ -41,6 +41,7 @@ export default function CreateOrderPage() {
   const isPending = orderType === "buy" ? isBuyPending : isSellPending;
   const isSuccess = orderType === "buy" ? isBuySuccess : isSellSuccess;
   const error = orderType === "buy" ? buyError : sellError;
+  const hash = orderType === "buy" ? buyHash : sellHash;
 
   // Show transaction toast notifications
   useOrderBookTransactionToast(
@@ -134,10 +135,10 @@ export default function CreateOrderPage() {
     
     try {
       await approve({ spender: CONTRACT_ADDRESSES.ORDER_BOOK, amount });
-      toast.success("MWG tokens approved successfully!");
+      // Toast handled by useOrderBookTransactionToast hook
     } catch (error) {
       console.error("Approval error:", error);
-      toast.error("Failed to approve MWG tokens");
+      // Error toast handled by useOrderBookTransactionToast hook
     }
   };
 

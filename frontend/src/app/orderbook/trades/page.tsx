@@ -6,13 +6,14 @@ import { useAccount } from "wagmi";
 import { useRouter } from "next/navigation";
 import { TradeHistoryTable } from "@/components/orderbook/TradeHistoryTable";
 import { 
-  useOrderFilledEvents,
-  type OrderFilledEvent
-} from "@/hooks/orderbook/useOrderBookEvents";
+  useOrderFillsAPI,
+  useUserFillsAsFillerAPI,
+  useUserFillsAsCreatorAPI,
+} from "@/hooks/orderbook/useOrderBookAPI";
 import { OrderType } from "@/types/orderbook";
 import { copyToClipboard } from "@/hooks/orderbook/useOrderBookToasts";
 
-type FilterType = "all" | "my-trades" | "buy" | "sell";
+type FilterType = "all" | "my-fills" | "my-orders-filled";
 type DateRangeType = "24h" | "7d" | "30d" | "all";
 
 export default function TradesPage() {
@@ -23,61 +24,50 @@ export default function TradesPage() {
   const [dateRange, setDateRange] = useState<DateRangeType>("all");
   const [searchQuery, setSearchQuery] = useState("");
 
-  // Fetch trade events - only watch OrderFilled events for this page
-  const orderFilledEvents = useOrderFilledEvents();
+  // Fetch fills from API based on filter
+  const { data: allFillsData } = useOrderFillsAPI(100, 0);
+  const { data: myFillsData } = useUserFillsAsFillerAPI(address, 100, 0);
+  const { data: myOrdersFillsData } = useUserFillsAsCreatorAPI(address, 100, 0);
 
-  // Convert events to trades format
+  // Select data based on filter
+  const fillsData = filter === "my-fills" 
+    ? myFillsData 
+    : filter === "my-orders-filled" 
+      ? myOrdersFillsData 
+      : allFillsData;
+
+  // Convert API data to trades format
   const allTrades = useMemo(() => {
-    if (!orderFilledEvents) return [];
-
-    return orderFilledEvents
-      .filter((event): event is Required<OrderFilledEvent> => 
-        event.timestamp !== undefined && 
-        event.transactionHash !== undefined && 
-        event.orderType !== undefined
-      )
-      .map(event => ({
-        orderId: event.orderId,
-        filler: event.filler,
-        mwgAmount: event.mwgAmount,
-        bnbAmount: event.bnbAmount,
-        timestamp: event.timestamp,
-        txHash: event.transactionHash,
-        orderType: event.orderType,
-      }));
-  }, [orderFilledEvents]);
+    const fills = (fillsData as any)?.fills || [];
+    
+    return fills.map((fill: any) => ({
+      orderId: BigInt(fill.orderId),
+      filler: fill.filler,
+      mwgAmount: BigInt(fill.mwgAmount),
+      bnbAmount: BigInt(fill.bnbAmount),
+      timestamp: new Date(fill.timestamp).getTime() / 1000,
+      txHash: fill.txHash,
+      orderType: fill.orderType || 0,
+    }));
+  }, [fillsData]);
 
   // Filter trades
   const filteredTrades = useMemo(() => {
     let trades = allTrades;
 
-    // Filter by user
-    if (filter === "my-trades" && address) {
-      trades = trades.filter(trade => 
-        trade.filler.toLowerCase() === address.toLowerCase()
-      );
-    }
-
-    // Filter by type
-    if (filter === "buy") {
-      trades = trades.filter(trade => trade.orderType === OrderType.BUY);
-    } else if (filter === "sell") {
-      trades = trades.filter(trade => trade.orderType === OrderType.SELL);
-    }
-
     // Filter by date range
     const now = Math.floor(Date.now() / 1000);
     if (dateRange === "24h") {
-      trades = trades.filter(trade => trade.timestamp > now - 86400);
+      trades = trades.filter((trade: any) => trade.timestamp > now - 86400);
     } else if (dateRange === "7d") {
-      trades = trades.filter(trade => trade.timestamp > now - 604800);
+      trades = trades.filter((trade: any) => trade.timestamp > now - 604800);
     } else if (dateRange === "30d") {
-      trades = trades.filter(trade => trade.timestamp > now - 2592000);
+      trades = trades.filter((trade: any) => trade.timestamp > now - 2592000);
     }
 
     // Filter by search query (order ID or address)
     if (searchQuery) {
-      trades = trades.filter(trade => 
+      trades = trades.filter((trade: any) => 
         trade.orderId.toString().includes(searchQuery) ||
         trade.filler.toLowerCase().includes(searchQuery.toLowerCase()) ||
         trade.txHash?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -85,20 +75,20 @@ export default function TradesPage() {
     }
 
     // Sort by most recent first
-    return trades.sort((a, b) => b.timestamp - a.timestamp);
-  }, [allTrades, filter, dateRange, searchQuery, address]);
+    return trades.sort((a: any, b: any) => b.timestamp - a.timestamp);
+  }, [allTrades, dateRange, searchQuery]);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const buyTrades = filteredTrades.filter(t => t.orderType === OrderType.BUY);
-    const sellTrades = filteredTrades.filter(t => t.orderType === OrderType.SELL);
+    const buyTrades = filteredTrades.filter((t: any) => t.orderType === OrderType.BUY);
+    const sellTrades = filteredTrades.filter((t: any) => t.orderType === OrderType.SELL);
     
-    const totalMWG = filteredTrades.reduce((sum, t) => sum + Number(t.mwgAmount), 0) / 1e18;
-    const totalBNB = filteredTrades.reduce((sum, t) => sum + Number(t.bnbAmount), 0) / 1e18;
+    const totalMWG = filteredTrades.reduce((sum: number, t: any) => sum + Number(t.mwgAmount), 0) / 1e18;
+    const totalBNB = filteredTrades.reduce((sum: number, t: any) => sum + Number(t.bnbAmount), 0) / 1e18;
     const avgPrice = totalBNB / totalMWG || 0;
 
     const myTrades = address 
-      ? filteredTrades.filter(t => t.filler.toLowerCase() === address.toLowerCase())
+      ? filteredTrades.filter((t: any) => t.filler.toLowerCase() === address.toLowerCase())
       : [];
 
     return {
@@ -119,7 +109,7 @@ export default function TradesPage() {
     }
 
     const headers = ["Time", "Type", "Order ID", "MWG Amount", "BNB Amount", "Price", "Trader", "Tx Hash"];
-    const rows = filteredTrades.map(trade => [
+    const rows = filteredTrades.map((trade: any) => [
       new Date(trade.timestamp * 1000).toISOString(),
       trade.orderType === OrderType.BUY ? "BUY" : "SELL",
       trade.orderId.toString(),
@@ -220,40 +210,32 @@ export default function TradesPage() {
                         : "bg-gray-700 text-gray-300 hover:bg-gray-600"
                     }`}
                   >
-                    All
+                    All Fills
                   </button>
                   {isConnected && (
-                    <button
-                      onClick={() => setFilter("my-trades")}
-                      className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                        filter === "my-trades"
-                          ? "bg-purple-600 text-white"
-                          : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                      }`}
-                    >
-                      My Trades ({stats.myTradesCount})
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setFilter("my-fills")}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          filter === "my-fills"
+                            ? "bg-purple-600 text-white"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
+                      >
+                        My Fills
+                      </button>
+                      <button
+                        onClick={() => setFilter("my-orders-filled")}
+                        className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                          filter === "my-orders-filled"
+                            ? "bg-purple-600 text-white"
+                            : "bg-gray-700 text-gray-300 hover:bg-gray-600"
+                        }`}
+                      >
+                        My Orders Filled
+                      </button>
+                    </>
                   )}
-                  <button
-                    onClick={() => setFilter("buy")}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      filter === "buy"
-                        ? "bg-green-600 text-white"
-                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                    }`}
-                  >
-                    Buy
-                  </button>
-                  <button
-                    onClick={() => setFilter("sell")}
-                    className={`px-3 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                      filter === "sell"
-                        ? "bg-red-600 text-white"
-                        : "bg-gray-700 text-gray-300 hover:bg-gray-600"
-                    }`}
-                  >
-                    Sell
-                  </button>
                 </div>
               </div>
 

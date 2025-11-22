@@ -8,17 +8,6 @@ export const CONTRACT_ADDRESSES = {
   ORDER_BOOK: process.env.NEXT_PUBLIC_ORDER_BOOK_ADDRESS as `0x${string}`,
 } as const;
 
-// Debug logging
-if (typeof window !== 'undefined') {
-  console.log('📋 Contract Addresses Loaded:', {
-    TOKEN: CONTRACT_ADDRESSES.TOKEN,
-    GAME: CONTRACT_ADDRESSES.GAME,
-    PARTNER_VAULT: CONTRACT_ADDRESSES.PARTNER_VAULT,
-    FARMING_POOL: CONTRACT_ADDRESSES.FARMING_POOL,
-    MWG_BNB_POOL: CONTRACT_ADDRESSES.MWG_BNB_POOL,
-    ORDER_BOOK: CONTRACT_ADDRESSES.ORDER_BOOK,
-  });
-}
 
 // Chain configuration
 export const SUPPORTED_CHAINS = {
