@@ -4,9 +4,10 @@ import React, { useState, useEffect } from "react";
 import { parseUnits, formatUnits } from "viem";
 import toast from "react-hot-toast";
 import { ORDER_BOOK_CONFIG } from "@/config/contracts";
+import { fetchBnbPrice } from "@/utils/fetchBnbPrice";
 
 export interface CreateBuyOrderFormProps {
-  onSubmit: (mwgAmount: bigint, pricePerMWG: bigint, expirySeconds: bigint, bnbValue: bigint) => void;
+  onSubmit: (mwgAmount: bigint, pricePerMWG: bigint, expirySeconds: bigint, bnbValue: bigint, email?: string) => void;
   isPending?: boolean;
   currentMarketPrice?: bigint;
   minMWGAmount?: bigint;
@@ -23,6 +24,26 @@ export function CreateBuyOrderForm({
   const [mwgAmount, setMwgAmount] = useState("");
   const [pricePerMWG, setPricePerMWG] = useState("");
   const [expiryPreset, setExpiryPreset] = useState(86400); // 24 hours default
+  const [email, setEmail] = useState("");
+  const [bnbUsdPrice, setBnbUsdPrice] = useState<number | null>(null);
+
+  // Fetch BNB price in USD
+  useEffect(() => {
+    const getBnbPrice = async () => {
+      try {
+        const price = await fetchBnbPrice();
+        setBnbUsdPrice(price);
+      } catch (error) {
+        console.error('Failed to fetch BNB price:', error);
+        // Don't set to null, keep previous value if fetch fails
+      }
+    };
+
+    getBnbPrice();
+    // Refresh every minute
+    const interval = setInterval(getBnbPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
 
   const calculateBNBRequired = () => {
     if (!mwgAmount || !pricePerMWG) return BigInt(0);
@@ -59,7 +80,13 @@ export function CreateBuyOrderForm({
         return;
       }
 
-      onSubmit(mwg, price, expiry, bnbRequired);
+      // Validate email if provided
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        toast.error("Invalid email format");
+        return;
+      }
+
+      onSubmit(mwg, price, expiry, bnbRequired, email || undefined);
     } catch (error) {
       console.error("Error creating order:", error);
       toast.error("Invalid input values");
@@ -97,15 +124,22 @@ export function CreateBuyOrderForm({
           <label className="block text-sm font-medium text-gray-300">
             Price Per MWG (in BNB)
           </label>
-          {currentMarketPrice && (
-            <button
-              type="button"
-              onClick={useSuggestedPrice}
-              className="text-xs text-purple-400 hover:text-purple-300"
-            >
-              Use Market Price
-            </button>
-          )}
+          <div className="flex items-center gap-3">
+            {bnbUsdPrice && (
+              <span className="text-xs text-gray-400">
+                1 BNB = ${bnbUsdPrice.toFixed(2)}
+              </span>
+            )}
+            {currentMarketPrice && (
+              <button
+                type="button"
+                onClick={useSuggestedPrice}
+                className="text-xs text-purple-400 hover:text-purple-300"
+              >
+                Use Market Price
+              </button>
+            )}
+          </div>
         </div>
         <input
           type="number"
@@ -117,11 +151,41 @@ export function CreateBuyOrderForm({
           required
           disabled={isPending}
         />
-        {currentMarketPrice && (
-          <p className="text-xs text-gray-400 mt-1">
-            Market price: {formatUnits(currentMarketPrice, 18)} BNB
-          </p>
-        )}
+        <div className="space-y-1 mt-1">
+          {currentMarketPrice && (
+            <p className="text-xs text-gray-400">
+              Market price: {formatUnits(currentMarketPrice, 18)} BNB
+            </p>
+          )}
+          {pricePerMWG && bnbUsdPrice && (
+            <p className="text-xs text-green-400 font-medium">
+              ≈ ${(parseFloat(pricePerMWG) * bnbUsdPrice).toFixed(6)} USD per MWG
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Email for Notifications (Optional) */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <label className="block text-sm font-medium text-gray-300">
+            Email for Fill Notifications (Optional)
+          </label>
+          <span className="text-xs text-gray-500" title="Get notified when your order is filled">
+            ℹ️
+          </span>
+        </div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="your@email.com"
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          disabled={isPending}
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          📧 Receive an email when someone fills your order
+        </p>
       </div>
 
       {/* Expiry Time */}

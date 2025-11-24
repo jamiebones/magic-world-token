@@ -4,7 +4,6 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useAccount, useBalance } from "wagmi";
 import { useRouter } from "next/navigation";
-import { parseUnits } from "viem";
 import toast from "react-hot-toast";
 import { CreateBuyOrderForm } from "@/components/orderbook/CreateBuyOrderForm";
 import { CreateSellOrderForm } from "@/components/orderbook/CreateSellOrderForm";
@@ -12,6 +11,7 @@ import { useCreateBuyOrder, useCreateSellOrder } from "@/hooks/orderbook/useOrde
 import { useBestSellPrice, useBestBuyPrice, useMinimumAmounts, useOrderBookPaused } from "@/hooks/orderbook/useOrderBook";
 import { useOrderBookTransactionToast, copyToClipboard } from "@/hooks/orderbook/useOrderBookToasts";
 import { useMWGBalance, useMWGAllowance, useApproveMWG } from "@/hooks/orderbook/useOrderBookActions";
+import { updateOrderEmail } from "@/hooks/orderbook/useOrderBookAPI";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 
 export default function CreateOrderPage() {
@@ -63,11 +63,60 @@ export default function CreateOrderPage() {
     }
   }, [isSuccess, router]);
 
-  const handleCreateBuyOrder = (
+  // Associate email with order after successful creation
+  useEffect(() => {
+    const associateEmail = async () => {
+      if (!isSuccess || !address) return;
+
+      const pendingEmail = sessionStorage.getItem('pendingOrderEmail');
+      if (!pendingEmail) return;
+
+      try {
+        // Wait a bit for the event listener to save the order to DB
+        await new Promise(resolve => setTimeout(resolve, 3000));
+
+        // Fetch user's most recent order to get the orderId
+        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/orderbook/user/${address}/orders?limit=1&sort=createdAt:desc`);
+        
+        if (!response.ok) {
+          throw new Error('Failed to fetch user orders');
+        }
+
+        const data = await response.json();
+        
+        if (!data.success || !data.orders || data.orders.length === 0) {
+          console.error('No orders found for user');
+          return;
+        }
+
+        const latestOrder = data.orders[0];
+        
+        // Associate email with the order
+        const updateResponse = await updateOrderEmail(latestOrder.orderId, pendingEmail, address);
+        
+        if (updateResponse.success) {
+          toast.success('📧 Email notification set up successfully!');
+          sessionStorage.removeItem('pendingOrderEmail');
+        } else {
+          console.error('Failed to update order email:', updateResponse.error);
+          toast.error('⚠️ Could not set up email notification. You can try again later.');
+        }
+      } catch (error) {
+        console.error('Error associating email with order:', error);
+        // Don't show error toast - order was created successfully, email is just a bonus feature
+        // User can still manually check their orders
+      }
+    };
+
+    associateEmail();
+  }, [isSuccess, address]);
+
+  const handleCreateBuyOrder = async (
     mwgAmount: bigint,
     pricePerMWG: bigint,
     expirySeconds: bigint,
-    bnbValue: bigint
+    bnbValue: bigint,
+    email?: string
   ) => {
     if (!isConnected) {
       toast.error("Please connect your wallet");
@@ -91,12 +140,18 @@ export default function CreateOrderPage() {
       expirySeconds,
       bnbValue,
     });
+
+    // Store email for later association
+    if (email && address) {
+      sessionStorage.setItem('pendingOrderEmail', email);
+    }
   };
 
-  const handleCreateSellOrder = (
+  const handleCreateSellOrder = async (
     mwgAmount: bigint,
     pricePerMWG: bigint,
-    expirySeconds: bigint
+    expirySeconds: bigint,
+    email?: string
   ) => {
     if (!isConnected) {
       toast.error("Please connect your wallet");
@@ -125,6 +180,11 @@ export default function CreateOrderPage() {
       pricePerMWG,
       expirySeconds,
     });
+
+    // Store email for later association
+    if (email && address) {
+      sessionStorage.setItem('pendingOrderEmail', email);
+    }
   };
 
   const handleApprove = async (amount: bigint) => {

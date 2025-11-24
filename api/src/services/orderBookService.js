@@ -464,6 +464,50 @@ class OrderBookService {
             throw error;
         }
     }
+
+    /**
+     * Update order email for notifications
+     */
+    async updateOrderEmail(orderId, email, walletAddress) {
+        try {
+            const order = await Order.findOne({ orderId });
+
+            if (!order) {
+                return {
+                    success: false,
+                    error: 'Order not found'
+                };
+            }
+
+            // Verify the wallet address matches the order creator
+            if (order.user.toLowerCase() !== walletAddress.toLowerCase()) {
+                return {
+                    success: false,
+                    error: 'Not authorized - only order creator can update email'
+                };
+            }
+
+            // Update email
+            order.email = email;
+            order.lastUpdated = Date.now();
+            await order.save();
+
+            logger.info(`[OrderBookService] Email updated for Order #${orderId}`);
+
+            return {
+                success: true,
+                message: email ? 'Email notification enabled' : 'Email notification disabled',
+                order: {
+                    orderId: order.orderId,
+                    email: order.email,
+                    emailEnabled: !!order.email
+                }
+            };
+        } catch (error) {
+            logger.error(`[OrderBookService] Error updating email for Order #${orderId}:`, error);
+            throw error;
+        }
+    }
 }
 
 const orderBookService = new OrderBookService();

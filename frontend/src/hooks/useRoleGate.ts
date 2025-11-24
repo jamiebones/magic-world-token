@@ -3,9 +3,10 @@ import { CONTRACT_ADDRESSES, DEFAULT_CHAIN_ID } from '@/config/contracts';
 import MagicWorldTokenABI from '@/abis/MagicWorldToken.json';
 import MagicWorldGameABI from '@/abis/MagicWorldGame.json';
 import PartnerVaultABI from '@/abis/PartnerVault.json';
+import MWGOrderBookABI from '@/abis/MWGOrderBook.json';
 import { keccak256, toBytes } from 'viem';
 
-type ContractType = 'token' | 'game' | 'vault';
+type ContractType = 'token' | 'game' | 'vault' | 'orderbook';
 
 interface UseRoleGateProps {
   contract: ContractType;
@@ -16,6 +17,7 @@ const CONTRACTS = {
   token: { address: CONTRACT_ADDRESSES.TOKEN as `0x${string}`, abi: MagicWorldTokenABI.abi },
   game: { address: CONTRACT_ADDRESSES.GAME as `0x${string}`, abi: MagicWorldGameABI.abi },
   vault: { address: CONTRACT_ADDRESSES.PARTNER_VAULT as `0x${string}`, abi: PartnerVaultABI.abi },
+  orderbook: { address: CONTRACT_ADDRESSES.ORDER_BOOK as `0x${string}`, abi: MWGOrderBookABI.abi },
 };
 
 // Pre-computed role hashes to avoid contract calls
@@ -42,17 +44,6 @@ export function useRoleGate({ contract, roleConstant }: UseRoleGateProps) {
   // Use pre-computed role hash instead of fetching from contract
   const roleHash = ROLE_HASHES[roleConstant];
 
-  console.log(`🔍 useRoleGate - ${contract} / ${roleConstant}:`, {
-    contractAddress: contractConfig.address,
-    userAddress: address,
-    isConnected,
-    roleHash,
-    hasContractAddress: !!contractConfig.address,
-    hasUserAddress: !!address,
-    hasRoleHash: !!roleHash,
-    abiLength: contractConfig.abi?.length,
-  });
-
   // Check if the address has that role
   const { data: hasRole, isLoading, refetch, error } = useReadContract({
     address: contractConfig.address,
@@ -65,11 +56,20 @@ export function useRoleGate({ contract, roleConstant }: UseRoleGateProps) {
     },
   });
 
-  console.log(`✅ Role check result ${contract}/${roleConstant}:`, {
-    hasRole,
-    isLoading,
-    error: error?.message,
-  });
+  // Debug logging for orderbook contract
+  if (contract === 'orderbook' && address) {
+    console.log('🎯 OrderBook Role Check:', {
+      contract,
+      roleConstant,
+      roleHash,
+      contractAddress: contractConfig.address,
+      userAddress: address,
+      hasRole,
+      isLoading,
+      error: error?.message,
+      enabled: isConnected && !!address && !!roleHash && !!contractConfig.address,
+    });
+  }
 
   return {
     hasRole: hasRole as boolean ?? false,
@@ -130,11 +130,18 @@ export function useIsPartnerVaultAdmin() {
 }
 
 /**
+ * Hook to check if user has admin role on order book
+ */
+export function useIsOrderBookAdmin() {
+  return useRoleGate({ contract: 'orderbook', roleConstant: 'ADMIN_ROLE' });
+}
+
+/**
  * Hook to check multiple roles at once
  */
 export function useMultiRoleGate() {
   const { address, isConnected } = useAccount();
-  
+
   const tokenAdmin = useIsDefaultAdmin('token');
   const gameAdmin = useIsGameAdmin();
   const gameDefaultAdmin = useIsDefaultAdmin('game');
@@ -142,24 +149,27 @@ export function useMultiRoleGate() {
   const pauseRole = useHasPauseRole();
   const vaultAdmin = useIsPartnerVaultAdmin();
   const vaultDefaultAdmin = useIsDefaultAdmin('vault');
+  const orderBookAdmin = useIsOrderBookAdmin();
 
-  const isAnyLoading = 
+  const isAnyLoading =
     tokenAdmin.isLoading ||
     gameAdmin.isLoading ||
     gameDefaultAdmin.isLoading ||
     rewardDistributor.isLoading ||
     pauseRole.isLoading ||
     vaultAdmin.isLoading ||
-    vaultDefaultAdmin.isLoading;
+    vaultDefaultAdmin.isLoading ||
+    orderBookAdmin.isLoading;
 
-  const hasAnyAdminRole = 
+  const hasAnyAdminRole =
     tokenAdmin.hasRole ||
     gameAdmin.hasRole ||
     gameDefaultAdmin.hasRole ||
     rewardDistributor.hasRole ||
     pauseRole.hasRole ||
     vaultAdmin.hasRole ||
-    vaultDefaultAdmin.hasRole;
+    vaultDefaultAdmin.hasRole ||
+    orderBookAdmin.hasRole;
 
   // Debug logging
   if (isConnected && !isAnyLoading) {
@@ -176,6 +186,7 @@ export function useMultiRoleGate() {
         pauseRole: pauseRole.hasRole,
         vaultAdmin: vaultAdmin.hasRole,
         vaultDefaultAdmin: vaultDefaultAdmin.hasRole,
+        orderBookAdmin: orderBookAdmin.hasRole,
       }
     });
   }
@@ -189,6 +200,7 @@ export function useMultiRoleGate() {
       pauseRole: pauseRole.hasRole,
       vaultAdmin: vaultAdmin.hasRole,
       vaultDefaultAdmin: vaultDefaultAdmin.hasRole,
+      orderBookAdmin: orderBookAdmin.hasRole,
     },
     isLoading: isAnyLoading,
     hasAnyAdminRole,

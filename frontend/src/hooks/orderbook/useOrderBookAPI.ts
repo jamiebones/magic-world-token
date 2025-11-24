@@ -267,3 +267,24 @@ export function useUserWithdrawalsAPI(address?: string, amountType?: 0 | 1, limi
         refetchInterval: 5000,
     });
 }
+
+/**
+ * Update order email for notifications
+ */
+export async function updateOrderEmail(orderId: string, email: string | null, walletAddress: string) {
+    const response = await fetch(`${API_BASE_URL}/api/orderbook/orders/${orderId}/email`, {
+        method: 'PUT',
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ email, walletAddress }),
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to update order email');
+    }
+
+    return response.json();
+}
+

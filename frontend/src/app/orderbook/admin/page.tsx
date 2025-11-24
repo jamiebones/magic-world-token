@@ -3,26 +3,25 @@
 import { useState, useMemo } from "react";
 import { useAccount } from "wagmi";
 import { useRouter } from "next/navigation";
+import { useConnectModal } from "@rainbow-me/rainbowkit";
 import { formatUnits, formatEther, parseUnits, parseEther } from "viem";
 import { 
-  useOrderBookStats, 
   useFeeInfo, 
   useMinimumAmounts,
-  useOrderBookPaused,
-  useActiveOrders,
-  useOrder
+  useOrderBookPaused
 } from "@/hooks/orderbook/useOrderBook";
+import { 
+  useOrderBookStatsAPI,
+  useActiveOrdersAPI,
+  useOrderFillsAPI,
+  useRecentActivityAPI
+} from "@/hooks/orderbook/useOrderBookAPI";
 import { 
   useSetFee, 
   useSetMinimumAmounts,
   useSetPaused,
   useCancelOrder 
 } from "@/hooks/orderbook/useOrderBookActions";
-import { 
-  useOrderCreatedEvents, 
-  useOrderFilledEvents, 
-  useOrderCancelledEvents 
-} from "@/hooks/orderbook/useOrderBookEvents";
 import { OrderCard } from "@/components/orderbook/OrderCard";
 import { FillOrderModal } from "@/components/orderbook/FillOrderModal";
 import type { Order } from "@/types/orderbook";
@@ -37,6 +36,7 @@ type TabType = "overview" | "orders" | "config" | "emergency";
 export default function AdminPage() {
   const router = useRouter();
   const { address } = useAccount();
+  const { openConnectModal } = useConnectModal();
   
   // Role-based access control - require ADMIN_ROLE
   // Note: This is a simplified check, as useRoleGate expects specific contract types
@@ -50,32 +50,62 @@ export default function AdminPage() {
   const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showFillModal, setShowFillModal] = useState(false);
 
-  // Contract state
-  const { stats, isLoading: statsLoading } = useOrderBookStats();
+  // Contract state (still use blockchain for current state)
   const { feePercentage, feeRecipient } = useFeeInfo();
   const { minMWGAmount, minBNBAmount } = useMinimumAmounts();
   const { isPaused, isLoading: pauseLoading } = useOrderBookPaused();
 
-  // Orders data
-  const { buyOrders, sellOrders, totalBuyOrders, totalSellOrders, isLoading: ordersLoading } = useActiveOrders();
+  // API data (use database for historical data)
+  const { data: statsData, isLoading: statsLoading } = useOrderBookStatsAPI();
+  const { data: buyOrdersData, isLoading: buyOrdersLoading } = useActiveOrdersAPI(0, 100);
+  const { data: sellOrdersData, isLoading: sellOrdersLoading } = useActiveOrdersAPI(1, 100);
+  const { data: fillsData, isLoading: fillsLoading } = useOrderFillsAPI(100);
+  const { data: activityData, isLoading: activityLoading } = useRecentActivityAPI(50);
 
-  // Combine orders
+  const ordersLoading = buyOrdersLoading || sellOrdersLoading;
+
+  // Combine orders from API
   const orders = useMemo(() => {
-    const buys = (buyOrders || []).map((order: any) => ({
+    const buys = (buyOrdersData?.orders || []).map((order: any) => ({
       ...order,
-      orderType: 0, // Buy
+      orderId: BigInt(order.orderId),
+      mwgAmount: BigInt(order.mwgAmount),
+      bnbAmount: BigInt(order.bnbAmount),
+      pricePerMWG: BigInt(order.pricePerMWG),
+      remaining: BigInt(order.remaining),
+      filled: BigInt(order.filled || 0),
+      user: order.user as `0x${string}`,
+      expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
+      orderType: 0,
     }));
-    const sells = (sellOrders || []).map((order: any) => ({
+    const sells = (sellOrdersData?.orders || []).map((order: any) => ({
       ...order,
-      orderType: 1, // Sell
+      orderId: BigInt(order.orderId),
+      mwgAmount: BigInt(order.mwgAmount),
+      bnbAmount: BigInt(order.bnbAmount),
+      pricePerMWG: BigInt(order.pricePerMWG),
+      remaining: BigInt(order.remaining),
+      filled: BigInt(order.filled || 0),
+      user: order.user as `0x${string}`,
+      expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
+      orderType: 1,
     }));
     return [...buys, ...sells];
-  }, [buyOrders, sellOrders]);
+  }, [buyOrdersData, sellOrdersData]);
 
-  // Events
-  const createdEvents = useOrderCreatedEvents();
-  const filledEvents = useOrderFilledEvents();
-  const cancelledEvents = useOrderCancelledEvents();
+  // Extract data from API responses
+  const stats = statsData?.stats;
+  const fills = (fillsData as any)?.fills || [];
+  const recentActivity = activityData?.activities || [];
+
+  // Get statistics from API data
+  const totalOrders = stats?.orders?.total || 0;
+  const activeOrders = stats?.orders?.active || 0;
+  const activeBuyOrders = stats?.orders?.activeBuy || 0;
+  const activeSellOrders = stats?.orders?.activeSell || 0;
+  const totalFills = stats?.fills?.total || 0;
+  const totalVolumeMWG = stats?.fills?.mwgVolume || 0;
+  const totalVolumeBNB = stats?.fills?.bnbVolume || 0;
 
   // Admin actions
   const { setFee, isPending: setFeePending, error: setFeeError, isSuccess: setFeeSuccess } = useSetFee();
@@ -102,26 +132,6 @@ export default function AdminPage() {
     if (orderFilter === "sell") return orders.filter((o: Order) => o.orderType === OrderType.SELL);
     return orders;
   }, [orders, orderFilter]);
-
-  // Calculate statistics
-  const totalVolumeMWG = useMemo(() => {
-    if (!filledEvents) return BigInt(0);
-    return filledEvents.reduce((sum, event) => sum + event.mwgAmount, BigInt(0));
-  }, [filledEvents]);
-
-  const totalVolumeBNB = useMemo(() => {
-    if (!filledEvents) return BigInt(0);
-    return filledEvents.reduce((sum, event) => sum + event.bnbAmount, BigInt(0));
-  }, [filledEvents]);
-
-  const totalFeesCollected = useMemo(() => {
-    if (!filledEvents || !feePercentage) return BigInt(0);
-    const feeBasisPoints = BigInt(feePercentage);
-    return filledEvents.reduce((sum, event) => {
-      const fee = (event.bnbAmount * feeBasisPoints) / BigInt(10000);
-      return sum + fee;
-    }, BigInt(0));
-  }, [filledEvents, feePercentage]);
 
   // Handle fee update
   const handleUpdateFee = async () => {
@@ -218,7 +228,7 @@ export default function AdminPage() {
   // Check if user is loading or doesn't have admin role
   if (roleLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
         <div className="text-center">
           <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-purple-500 mx-auto mb-4"></div>
           <p className="text-gray-400">Verifying admin access...</p>
@@ -228,22 +238,53 @@ export default function AdminPage() {
   }
 
   if (!hasRole) {
-    return null; // Will redirect
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900 flex items-center justify-center">
+        <div className="max-w-md w-full mx-4">
+          <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-8 border border-gray-700 text-center">
+            <div className="mb-6">
+              <svg className="w-20 h-20 mx-auto text-purple-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+              </svg>
+            </div>
+            <h2 className="text-2xl font-bold text-white mb-3">Admin Access Required</h2>
+            <p className="text-gray-400 mb-6">
+              Please connect your admin wallet to access the order book administration panel.
+            </p>
+            <div className="space-y-3">
+              <button
+                onClick={() => openConnectModal?.()}
+                className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200"
+              >
+                Connect Admin Wallet
+              </button>
+              <button
+                onClick={() => router.push('/orderbook')}
+                className="w-full bg-gray-700 hover:bg-gray-600 text-white font-semibold py-3 px-6 rounded-lg transition-all duration-200"
+              >
+                Back to Order Book
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   const isLoading = statsLoading || pauseLoading;
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-7xl">
-      {/* Header */}
-      <div className="mb-8">
-        <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
-          Order Book Admin
-        </h1>
-        <p className="text-gray-400">
-          Manage order book configuration, monitor platform activity, and perform administrative actions
-        </p>
-      </div>
+    <div className="min-h-screen bg-gradient-to-br from-gray-900 via-purple-900 to-gray-900">
+      <div className="container mx-auto px-4 py-8 max-w-7xl">
+        {/* Header */}
+        <div className="mb-8">
+          <h1 className="text-4xl font-bold mb-2 bg-gradient-to-r from-purple-400 to-pink-600 bg-clip-text text-transparent">
+            Order Book Admin
+          </h1>
+          <p className="text-gray-400">
+            Manage order book configuration, monitor platform activity, and perform administrative actions
+          </p>
+        </div>
 
       {/* Pause Status Banner */}
       {isPaused && (
@@ -293,7 +334,7 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
                 <div className="text-gray-400 text-sm mb-1">Total Orders Created</div>
                 <div className="text-3xl font-bold text-white">
-                  {isLoading ? "..." : (createdEvents?.length || 0)}
+                  {isLoading ? "..." : totalOrders}
                 </div>
               </div>
 
@@ -301,7 +342,7 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
                 <div className="text-gray-400 text-sm mb-1">Active Orders</div>
                 <div className="text-3xl font-bold text-green-400">
-                  {isLoading ? "..." : (orders?.length || 0)}
+                  {isLoading ? "..." : activeOrders}
                 </div>
               </div>
 
@@ -309,7 +350,7 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
                 <div className="text-gray-400 text-sm mb-1">Total Trades</div>
                 <div className="text-3xl font-bold text-blue-400">
-                  {isLoading ? "..." : (filledEvents?.length || 0)}
+                  {isLoading ? "..." : totalFills}
                 </div>
               </div>
 
@@ -317,7 +358,7 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
                 <div className="text-gray-400 text-sm mb-1">Cancelled Orders</div>
                 <div className="text-3xl font-bold text-red-400">
-                  {isLoading ? "..." : (cancelledEvents?.length || 0)}
+                  {isLoading ? "..." : (stats?.orders?.cancelled || 0)}
                 </div>
               </div>
             </div>
@@ -327,11 +368,12 @@ export default function AdminPage() {
           <div>
             <h2 className="text-2xl font-bold mb-4 text-gray-200">Trading Volume</h2>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
               {/* Total MWG Volume */}
               <div className="bg-gradient-to-br from-purple-900/20 to-purple-800/20 rounded-lg p-6 border border-purple-700/30">
                 <div className="text-purple-300 text-sm mb-1">Total MWG Volume</div>
                 <div className="text-3xl font-bold text-purple-400">
-                  {isLoading ? "..." : formatUnits(totalVolumeMWG, 18)}
+                  {isLoading ? "..." : parseFloat(formatUnits(BigInt(totalVolumeMWG), 18)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                 </div>
                 <div className="text-purple-300 text-sm mt-1">MWG</div>
               </div>
@@ -340,7 +382,7 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-yellow-900/20 to-yellow-800/20 rounded-lg p-6 border border-yellow-700/30">
                 <div className="text-yellow-300 text-sm mb-1">Total BNB Volume</div>
                 <div className="text-3xl font-bold text-yellow-400">
-                  {isLoading ? "..." : parseFloat(formatEther(totalVolumeBNB)).toFixed(4)}
+                  {isLoading ? "..." : parseFloat(formatEther(BigInt(totalVolumeBNB))).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                 </div>
                 <div className="text-yellow-300 text-sm mt-1">BNB</div>
               </div>
@@ -349,9 +391,9 @@ export default function AdminPage() {
               <div className="bg-gradient-to-br from-green-900/20 to-green-800/20 rounded-lg p-6 border border-green-700/30">
                 <div className="text-green-300 text-sm mb-1">Total Fees Collected</div>
                 <div className="text-3xl font-bold text-green-400">
-                  {isLoading ? "..." : parseFloat(formatEther(totalFeesCollected)).toFixed(6)}
+                  {isLoading ? "..." : "N/A"}
                 </div>
-                <div className="text-green-300 text-sm mt-1">BNB</div>
+                <div className="text-green-300 text-sm mt-1">BNB (fees go to recipient)</div>
               </div>
             </div>
           </div>
@@ -378,14 +420,14 @@ export default function AdminPage() {
                 <div>
                   <div className="text-gray-400 text-sm mb-1">Minimum MWG Amount</div>
                   <div className="text-xl font-semibold text-white">
-                    {isLoading ? "..." : `${formatUnits(minMWGAmount || BigInt(0), 18)} MWG`}
+                    {pauseLoading ? "..." : `${parseFloat(formatUnits(minMWGAmount || BigInt(0), 18)).toLocaleString()} MWG`}
                   </div>
                 </div>
 
                 <div>
                   <div className="text-gray-400 text-sm mb-1">Minimum BNB Amount</div>
                   <div className="text-xl font-semibold text-white">
-                    {isLoading ? "..." : `${formatEther(minBNBAmount || BigInt(0))} BNB`}
+                    {pauseLoading ? "..." : `${parseFloat(formatEther(minBNBAmount || BigInt(0))).toLocaleString()} BNB`}
                   </div>
                 </div>
 
@@ -404,38 +446,28 @@ export default function AdminPage() {
             <h2 className="text-2xl font-bold mb-4 text-gray-200">Recent Activity</h2>
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
               <div className="space-y-3 max-h-96 overflow-y-auto">
-                {[
-                  ...(createdEvents?.slice(0, 5).map(e => ({ type: "created", event: e })) || []),
-                  ...(filledEvents?.slice(0, 5).map(e => ({ type: "filled", event: e })) || []),
-                  ...(cancelledEvents?.slice(0, 5).map(e => ({ type: "cancelled", event: e })) || [])
-                ]
-                  .sort((a, b) => {
-                    // Sort by most recent (this is simplified, real implementation would use timestamps)
-                    return 0;
-                  })
-                  .slice(0, 10)
-                  .map((item, idx) => (
+                {recentActivity.length > 0 ? (
+                  recentActivity.map((activity: any, idx: number) => (
                     <div key={idx} className="flex items-center justify-between py-2 border-b border-gray-700 last:border-0">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${
-                          item.type === "created" ? "bg-blue-400" :
-                          item.type === "filled" ? "bg-green-400" : "bg-red-400"
+                          activity.type === "created" ? "bg-blue-400" :
+                          activity.type === "filled" ? "bg-green-400" : "bg-red-400"
                         }`} />
-                        <span className="text-gray-300 capitalize">{item.type}</span>
-                        {item.type === "created" && (
-                          <span className="text-gray-400">Order #{(item.event as any).orderId?.toString()}</span>
-                        )}
-                        {item.type === "filled" && (
-                          <span className="text-gray-400">Order #{(item.event as any).orderId?.toString()}</span>
-                        )}
-                        {item.type === "cancelled" && (
-                          <span className="text-gray-400">Order #{(item.event as any).orderId?.toString()}</span>
+                        <span className="text-gray-300 capitalize">{activity.type}</span>
+                        <span className="text-gray-400">Order #{activity.data?.orderId}</span>
+                        {activity.type === "filled" && activity.data?.mwgAmount && (
+                          <span className="text-gray-500 text-sm">
+                            {parseFloat(activity.data.mwgAmount).toFixed(2)} MWG
+                          </span>
                         )}
                       </div>
-                      <span className="text-gray-500 text-sm">Just now</span>
+                      <span className="text-gray-500 text-sm">
+                        {new Date(activity.timestamp).toLocaleTimeString()}
+                      </span>
                     </div>
-                  ))}
-                {(!createdEvents?.length && !filledEvents?.length && !cancelledEvents?.length) && (
+                  ))
+                ) : (
                   <p className="text-gray-500 text-center py-8">No recent activity</p>
                 )}
               </div>
@@ -701,6 +733,8 @@ export default function AdminPage() {
           }}
         />
       )}
+   
+      </div>
     </div>
   );
 }

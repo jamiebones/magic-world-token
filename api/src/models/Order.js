@@ -70,6 +70,21 @@ const orderSchema = new mongoose.Schema({
     required: true,
     index: true
   },
+  // Email for notifications (optional)
+  email: {
+    type: String,
+    required: false,
+    lowercase: true,
+    trim: true,
+    validate: {
+      validator: function (v) {
+        // Only validate if email is provided
+        if (!v) return true;
+        return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v);
+      },
+      message: props => `${props.value} is not a valid email address!`
+    }
+  },
   // Metadata
   lastUpdated: {
     type: Date,

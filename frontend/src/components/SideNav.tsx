@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useAccount } from "wagmi";
 import { useMultiRoleGate } from "@/hooks/useRoleGate";
 
 interface NavLink {
@@ -16,7 +17,13 @@ interface NavLink {
 export function SideNav() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
-  const { hasAnyAdminRole, isLoading } = useMultiRoleGate();
+  const { isConnected } = useAccount();
+  const { hasAnyAdminRole, isLoading, roles } = useMultiRoleGate();
+
+  // Don't render sidebar if wallet is not connected
+  if (!isConnected) {
+    return null;
+  }
 
   const isActive = (path: string) => {
     // Exact match only - no parent highlighting when on child routes

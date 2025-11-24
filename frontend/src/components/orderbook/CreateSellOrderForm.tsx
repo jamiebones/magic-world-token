@@ -6,7 +6,7 @@ import toast from "react-hot-toast";
 import { ORDER_BOOK_CONFIG } from "@/config/contracts";
 
 export interface CreateSellOrderFormProps {
-  onSubmit: (mwgAmount: bigint, pricePerMWG: bigint, expirySeconds: bigint) => void;
+  onSubmit: (mwgAmount: bigint, pricePerMWG: bigint, expirySeconds: bigint, email?: string) => void;
   onApprove: (amount: bigint) => void;
   isPending?: boolean;
   isApprovePending?: boolean;
@@ -31,6 +31,7 @@ export function CreateSellOrderForm({
   const [mwgAmount, setMwgAmount] = useState("");
   const [pricePerMWG, setPricePerMWG] = useState("");
   const [expiryPreset, setExpiryPreset] = useState(86400); // 24 hours default
+  const [email, setEmail] = useState("");
 
   const calculateBNBReceiving = () => {
     if (!mwgAmount || !pricePerMWG) return BigInt(0);
@@ -102,7 +103,13 @@ export function CreateSellOrderForm({
         return;
       }
 
-      onSubmit(mwg, price, expiry);
+      // Validate email if provided
+      if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+        toast.error("Invalid email format");
+        return;
+      }
+
+      onSubmit(mwg, price, expiry, email || undefined);
     } catch (error) {
       console.error("Error creating order:", error);
       toast.error("Invalid input values");
@@ -183,6 +190,29 @@ export function CreateSellOrderForm({
             Market price: {formatUnits(currentMarketPrice, 18)} BNB
           </p>
         )}
+      </div>
+
+      {/* Email for Notifications (Optional) */}
+      <div>
+        <div className="flex items-center gap-2 mb-2">
+          <label className="block text-sm font-medium text-gray-300">
+            Email for Fill Notifications (Optional)
+          </label>
+          <span className="text-xs text-gray-500" title="Get notified when your order is filled">
+            ℹ️
+          </span>
+        </div>
+        <input
+          type="email"
+          value={email}
+          onChange={(e) => setEmail(e.target.value)}
+          placeholder="your@email.com"
+          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+          disabled={isPending || isApprovePending}
+        />
+        <p className="text-xs text-gray-400 mt-1">
+          📧 Receive an email when someone fills your order
+        </p>
       </div>
 
       {/* Expiry Time */}

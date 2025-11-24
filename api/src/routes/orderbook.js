@@ -914,4 +914,93 @@ router.post('/admin/sync', async (req, res) => {
     }
 });
 
+/**
+ * @swagger
+ * /api/orderbook/orders/{orderId}/email:
+ *   put:
+ *     summary: Update order email for notifications
+ *     description: Add or update email address for order fill notifications. Only the order creator can update.
+ *     tags: [OrderBook]
+ *     parameters:
+ *       - in: path
+ *         name: orderId
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: The order ID
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - email
+ *               - walletAddress
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 description: Email address for notifications (empty string to remove)
+ *               walletAddress:
+ *                 type: string
+ *                 description: Wallet address of the order creator (for verification)
+ *     responses:
+ *       200:
+ *         description: Email updated successfully
+ *       400:
+ *         description: Invalid email format or missing parameters
+ *       403:
+ *         description: Not authorized (not the order creator)
+ *       404:
+ *         description: Order not found
+ */
+router.put('/orders/:orderId/email', async (req, res) => {
+    try {
+        const { orderId } = req.params;
+        const { email, walletAddress } = req.body;
+
+        if (!orderId) {
+            return res.status(400).json({
+                success: false,
+                error: 'Order ID is required'
+            });
+        }
+
+        if (!walletAddress) {
+            return res.status(400).json({
+                success: false,
+                error: 'Wallet address is required for verification'
+            });
+        }
+
+        if (email !== undefined && email !== null && email !== '') {
+            // Validate email format
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(email)) {
+                return res.status(400).json({
+                    success: false,
+                    error: 'Invalid email format'
+                });
+            }
+        }
+
+        const result = await orderBookService.updateOrderEmail(orderId, email || null, walletAddress);
+
+        if (!result.success) {
+            const statusCode = result.error.includes('not found') ? 404 :
+                result.error.includes('not authorized') ? 403 : 400;
+            return res.status(statusCode).json(result);
+        }
+
+        res.json(result);
+    } catch (error) {
+        console.error('[OrderBook API] Error updating order email:', error);
+        res.status(500).json({
+            success: false,
+            error: 'Failed to update order email'
+        });
+    }
+});
+
 module.exports = router;

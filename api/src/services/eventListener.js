@@ -316,7 +316,35 @@ class OrderBookEventListener {
 
       // Update order status based on event's newStatus
       await order.updateStatus(eventData.newStatus);
-      logger.info(`[OrderBook Order #${eventData.orderId} status updated to ${eventData.newStatus}`);
+      logger.info(`[OrderBook] Order #${eventData.orderId} status updated to ${eventData.newStatus}`);
+
+      // Send email notification if email is provided
+      if (order.email) {
+        try {
+          const emailService = require('./emailService');
+          const isFullyFilled = remaining === '0';
+
+          await emailService.sendOrderFilledEmail({
+            email: order.email,
+            orderId: order.orderId,
+            orderType: order.orderType,
+            mwgAmount: order.mwgAmount,
+            pricePerMWG: order.pricePerMWG,
+            totalBNB: order.bnbAmount,
+            filledAmount: eventData.mwgAmount,
+            remainingAmount: remaining,
+            isFullyFilled,
+            fillerAddress: eventData.filler,
+            txHash: eventData.txHash,
+            network: 'BSC Mainnet'
+          });
+
+          logger.info(`[OrderBook] Email notification sent for Order #${eventData.orderId}`);
+        } catch (emailError) {
+          logger.error(`[OrderBook] Failed to send email for Order #${eventData.orderId}:`, emailError.message);
+          // Don't throw - email failure shouldn't stop order processing
+        }
+      }
     } catch (error) {
       logger.error(`[OrderBook Error saving OrderFilled #${eventData.orderId}:`, error);
       throw error;
