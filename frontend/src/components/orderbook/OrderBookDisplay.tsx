@@ -3,8 +3,7 @@
 import React from "react";
 import { formatUnits } from "viem";
 import toast from "react-hot-toast";
-import { OrderType, ORDER_TYPE_LABELS } from "@/types/orderbook";
-import { copyToClipboard } from "@/hooks/orderbook/useOrderBookToasts";
+import { OrderType } from "@/types/orderbook";
 
 export interface OrderBookDisplayProps {
   buyOrders: Array<{

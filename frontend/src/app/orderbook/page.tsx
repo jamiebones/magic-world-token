@@ -17,23 +17,22 @@ import { FillOrderModal } from "@/components/orderbook/FillOrderModal";
 import { FarmingStatsCard } from "@/components/farming/FarmingStatsCard";
 import { formatUnits } from "viem";
 
-import { showInfoToast, useOrderBookTransactionToast } from "@/hooks/orderbook/useOrderBookToasts";
+import { useOrderBookTransactionToast } from "@/hooks/orderbook/useOrderBookToasts";
 import { useFillBuyOrder, useFillSellOrder } from "@/hooks/orderbook/useOrderBookActions";
+import type { Order } from "@/types/orderbook";
+import { OrderType, OrderStatus } from "@/types/orderbook";
 
-// Order type for fill modal
-interface OrderForFill {
-  orderId: bigint;
-  user: `0x${string}`;
-  orderType: number;
-  mwgAmount: bigint;
-  bnbAmount: bigint;
-  pricePerMWG: bigint;
-  remaining: bigint;
-  status: number;
-  expiresAt: bigint;
-  filled?: bigint;
-  createdAt?: bigint;
-  feeAtCreation?: bigint;
+// API Order type from backend
+interface APIOrder {
+  orderId: string;
+  pricePerMWG: string;
+  remaining?: string;
+  mwgAmount: string;
+  user: string;
+  status: number | string;
+  expiresAt: string;
+  bnbAmount: string;
+  filled?: string;
 }
 
 export default function OrderBookPage() {
@@ -41,7 +40,7 @@ export default function OrderBookPage() {
   const queryClient = useQueryClient();
   
   // Use API hooks instead of blockchain hooks for historical data
-  const { data: statsData, isLoading: isLoadingStats } = useOrderBookStatsAPI();
+  const { isLoading: isLoadingStats } = useOrderBookStatsAPI();
   const { data: bestPricesData } = useBestPricesAPI();
   const { data: buyOrdersData, isLoading: isLoadingBuyOrders } = useActiveOrdersAPI(0, 50);
   const { data: sellOrdersData, isLoading: isLoadingSellOrders } = useActiveOrdersAPI(1, 50);
@@ -50,8 +49,7 @@ export default function OrderBookPage() {
   // Still use blockchain for contract state
   const { isPaused } = useOrderBookPaused();
   
-  const [hasShownWelcome, setHasShownWelcome] = useState(false);
-  const [selectedOrder, setSelectedOrder] = useState<OrderForFill | null>(null);
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null);
   const [showFillModal, setShowFillModal] = useState(false);
 
   // Fill order hooks
@@ -84,38 +82,41 @@ export default function OrderBookPage() {
   }, [isBuyFillSuccess, isSellFillSuccess, queryClient]);
 
   // Extract data from API responses
-  const stats = statsData?.stats;
   const bestBuy = bestPricesData?.bestBuy?.price ? BigInt(bestPricesData.bestBuy.price) : null;
   const bestSell = bestPricesData?.bestSell?.price ? BigInt(bestPricesData.bestSell.price) : null;
-  const recentActivity = activityData?.activities || [];
+  const recentActivity = useMemo(() => activityData?.activities || [], [activityData?.activities]);
   const isLoadingOrders = isLoadingBuyOrders || isLoadingSellOrders;
   
   // Process orders from API data
   const { buyOrders, sellOrders, activeOrderCount } = useMemo(() => {
-    const buys = (buyOrdersData?.orders || []).map((order: any) => ({
+    const buys = (buyOrdersData?.orders || []).map((order: APIOrder) => ({
       orderId: BigInt(order.orderId),
       pricePerMWG: BigInt(order.pricePerMWG),
       remaining: BigInt(order.remaining || order.mwgAmount),
       user: order.user as `0x${string}`,
-      orderType: 0,
-      status: order.status,
+      orderType: OrderType.BUY,
+      status: (typeof order.status === 'string' ? parseInt(order.status) : order.status) as OrderStatus,
       expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
       bnbAmount: BigInt(order.bnbAmount),
       mwgAmount: BigInt(order.mwgAmount),
       filled: BigInt(order.filled || 0),
+      createdAt: BigInt(Math.floor(new Date(order.expiresAt).getTime() / 1000)),
+      feeAtCreation: BigInt(0),
     }));
 
-    const sells = (sellOrdersData?.orders || []).map((order: any) => ({
+    const sells = (sellOrdersData?.orders || []).map((order: APIOrder) => ({
       orderId: BigInt(order.orderId),
       pricePerMWG: BigInt(order.pricePerMWG),
       remaining: BigInt(order.remaining || order.mwgAmount),
       user: order.user as `0x${string}`,
-      orderType: 1,
-      status: order.status,
+      orderType: OrderType.SELL,
+      status: (typeof order.status === 'string' ? parseInt(order.status) : order.status) as OrderStatus,
       expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
       bnbAmount: BigInt(order.bnbAmount),
       mwgAmount: BigInt(order.mwgAmount),
       filled: BigInt(order.filled || 0),
+      createdAt: BigInt(Math.floor(new Date(order.expiresAt).getTime() / 1000)),
+      feeAtCreation: BigInt(0),
     }));
 
     return {
@@ -126,13 +127,13 @@ export default function OrderBookPage() {
   }, [buyOrdersData, sellOrdersData]);
 
   // Handle order click - open fill modal
-  const handleOrderClick = (orderId: bigint, orderType: number) => {
+  const handleOrderClick = (orderId: bigint) => {
     // Find the order in our lists
     const allOrders = [...buyOrders, ...sellOrders];
     const order = allOrders.find(o => o.orderId === orderId);
     
     if (order) {
-      setSelectedOrder(order as any);
+      setSelectedOrder(order);
       setShowFillModal(true);
     }
   };
@@ -142,7 +143,7 @@ export default function OrderBookPage() {
     if (!selectedOrder) return;
 
     try {
-      if (selectedOrder.orderType === 0) {
+      if (selectedOrder.orderType === OrderType.BUY) {
         // Filling buy order: send MWG, receive BNB
         await fillBuyOrder({ orderId, mwgAmount });
         // Toast handled by useOrderBookTransactionToast
@@ -165,8 +166,8 @@ export default function OrderBookPage() {
   useEffect(() => {
     if (recentActivity && recentActivity.length > 0) {
       const latestActivity = recentActivity[0];
-      if (latestActivity.type === "created" && "user" in latestActivity.data) {
-        const eventData = latestActivity.data as any;
+      if (latestActivity.type === "created" && latestActivity.data && typeof latestActivity.data === "object" && "user" in latestActivity.data) {
+        const eventData = latestActivity.data as { user?: string; orderType?: number };
         if (eventData.user?.toLowerCase() !== address?.toLowerCase()) {
           const orderType = eventData.orderType === 0 ? "buy" : "sell";
           toast(`🔔 New ${orderType} order created!`, {
@@ -271,8 +272,8 @@ export default function OrderBookPage() {
               bestBuyPrice={bestBuy || undefined}
               bestSellPrice={bestSell || undefined}
               isLoading={isLoadingOrders}
-              onOrderClick={(orderId, type) => {
-                handleOrderClick(orderId, type);
+              onOrderClick={(orderId) => {
+                handleOrderClick(orderId);
               }}
               connectedAddress={address}
             />
@@ -309,9 +310,9 @@ export default function OrderBookPage() {
                         </p>
                       </div>
                     </div>
-                    {activity.type === "created" && "orderId" in activity.data && (
+                    {activity.type === "created" && "orderId" in activity && (
                       <span className="text-sm text-gray-300">
-                        Order #{activity.data.orderId.toString()}
+                        Order #{activity.orderId}
                       </span>
                     )}
                   </div>
@@ -337,7 +338,7 @@ export default function OrderBookPage() {
       {/* Fill Order Modal */}
       {selectedOrder && (
         <FillOrderModal
-          order={selectedOrder as any}
+          order={selectedOrder}
           isOpen={showFillModal}
           onClose={() => {
             setShowFillModal(false);

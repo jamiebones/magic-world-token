@@ -3,7 +3,6 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import { useAccount } from "wagmi";
-import { useRouter } from "next/navigation";
 import { TradeHistoryTable } from "@/components/orderbook/TradeHistoryTable";
 import { 
   useOrderFillsAPI,
@@ -11,13 +10,11 @@ import {
   useUserFillsAsCreatorAPI,
 } from "@/hooks/orderbook/useOrderBookAPI";
 import { OrderType } from "@/types/orderbook";
-import { copyToClipboard } from "@/hooks/orderbook/useOrderBookToasts";
 
 type FilterType = "all" | "my-fills" | "my-orders-filled";
 type DateRangeType = "24h" | "7d" | "30d" | "all";
 
 export default function TradesPage() {
-  const router = useRouter();
   const { address, isConnected } = useAccount();
   
   const [filter, setFilter] = useState<FilterType>("all");
@@ -38,11 +35,11 @@ export default function TradesPage() {
 
   // Convert API data to trades format
   const allTrades = useMemo(() => {
-    const fills = (fillsData as any)?.fills || [];
+    const fills = (fillsData as { fills?: Array<{ orderId: string; filler: string; mwgAmount: string; bnbAmount: string; timestamp: string; txHash: string; orderType?: number }> })?.fills || [];
     
-    return fills.map((fill: any) => ({
+    return fills.map((fill: { orderId: string; filler: string; mwgAmount: string; bnbAmount: string; timestamp: string; txHash: string; orderType?: number }) => ({
       orderId: BigInt(fill.orderId),
-      filler: fill.filler,
+      filler: fill.filler as `0x${string}`,
       mwgAmount: BigInt(fill.mwgAmount),
       bnbAmount: BigInt(fill.bnbAmount),
       timestamp: new Date(fill.timestamp).getTime() / 1000,
@@ -58,16 +55,16 @@ export default function TradesPage() {
     // Filter by date range
     const now = Math.floor(Date.now() / 1000);
     if (dateRange === "24h") {
-      trades = trades.filter((trade: any) => trade.timestamp > now - 86400);
+      trades = trades.filter((trade: { timestamp: number }) => trade.timestamp > now - 86400);
     } else if (dateRange === "7d") {
-      trades = trades.filter((trade: any) => trade.timestamp > now - 604800);
+      trades = trades.filter((trade: { timestamp: number }) => trade.timestamp > now - 604800);
     } else if (dateRange === "30d") {
-      trades = trades.filter((trade: any) => trade.timestamp > now - 2592000);
+      trades = trades.filter((trade: { timestamp: number }) => trade.timestamp > now - 2592000);
     }
 
     // Filter by search query (order ID or address)
     if (searchQuery) {
-      trades = trades.filter((trade: any) => 
+      trades = trades.filter((trade: { orderId: bigint; filler: string; txHash?: string }) => 
         trade.orderId.toString().includes(searchQuery) ||
         trade.filler.toLowerCase().includes(searchQuery.toLowerCase()) ||
         trade.txHash?.toLowerCase().includes(searchQuery.toLowerCase())
@@ -75,20 +72,20 @@ export default function TradesPage() {
     }
 
     // Sort by most recent first
-    return trades.sort((a: any, b: any) => b.timestamp - a.timestamp);
+    return trades.sort((a: { timestamp: number }, b: { timestamp: number }) => b.timestamp - a.timestamp);
   }, [allTrades, dateRange, searchQuery]);
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const buyTrades = filteredTrades.filter((t: any) => t.orderType === OrderType.BUY);
-    const sellTrades = filteredTrades.filter((t: any) => t.orderType === OrderType.SELL);
+    const buyTrades = filteredTrades.filter((t: { orderType: number }) => t.orderType === OrderType.BUY);
+    const sellTrades = filteredTrades.filter((t: { orderType: number }) => t.orderType === OrderType.SELL);
     
-    const totalMWG = filteredTrades.reduce((sum: number, t: any) => sum + Number(t.mwgAmount), 0) / 1e18;
-    const totalBNB = filteredTrades.reduce((sum: number, t: any) => sum + Number(t.bnbAmount), 0) / 1e18;
+    const totalMWG = filteredTrades.reduce((sum: number, t: { mwgAmount: bigint }) => sum + Number(t.mwgAmount), 0) / 1e18;
+    const totalBNB = filteredTrades.reduce((sum: number, t: { bnbAmount: bigint }) => sum + Number(t.bnbAmount), 0) / 1e18;
     const avgPrice = totalBNB / totalMWG || 0;
 
     const myTrades = address 
-      ? filteredTrades.filter((t: any) => t.filler.toLowerCase() === address.toLowerCase())
+      ? filteredTrades.filter((t: { filler: string }) => t.filler.toLowerCase() === address.toLowerCase())
       : [];
 
     return {
@@ -109,7 +106,7 @@ export default function TradesPage() {
     }
 
     const headers = ["Time", "Type", "Order ID", "MWG Amount", "BNB Amount", "Price", "Trader", "Tx Hash"];
-    const rows = filteredTrades.map((trade: any) => [
+    const rows = filteredTrades.map((trade: { timestamp: number; orderType: number; orderId: bigint; mwgAmount: bigint; bnbAmount: bigint; filler: string; txHash?: string }) => [
       new Date(trade.timestamp * 1000).toISOString(),
       trade.orderType === OrderType.BUY ? "BUY" : "SELL",
       trade.orderId.toString(),

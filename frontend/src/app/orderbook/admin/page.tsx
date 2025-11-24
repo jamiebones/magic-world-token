@@ -13,7 +13,6 @@ import {
 import { 
   useOrderBookStatsAPI,
   useActiveOrdersAPI,
-  useOrderFillsAPI,
   useRecentActivityAPI
 } from "@/hooks/orderbook/useOrderBookAPI";
 import { 
@@ -26,12 +25,23 @@ import { OrderCard } from "@/components/orderbook/OrderCard";
 import { FillOrderModal } from "@/components/orderbook/FillOrderModal";
 import type { Order } from "@/types/orderbook";
 import { OrderType } from "@/types/orderbook";
-import { showInfoToast, showWarningToast } from "@/hooks/orderbook/useOrderBookToasts";
-import { useRoleGate } from "@/hooks/useRoleGate";
-import { CONTRACT_ADDRESSES } from "@/config/contracts";
 import toast from "react-hot-toast";
 
 type TabType = "overview" | "orders" | "config" | "emergency";
+
+// API Order type from backend
+interface APIOrder {
+  orderId: string;
+  pricePerMWG: string;
+  remaining?: string;
+  mwgAmount: string;
+  user: string;
+  status: number | string;
+  expiresAt: string;
+  bnbAmount: string;
+  filled?: string;
+  feeAtCreation?: string;
+}
 
 export default function AdminPage() {
   const router = useRouter();
@@ -59,59 +69,59 @@ export default function AdminPage() {
   const { data: statsData, isLoading: statsLoading } = useOrderBookStatsAPI();
   const { data: buyOrdersData, isLoading: buyOrdersLoading } = useActiveOrdersAPI(0, 100);
   const { data: sellOrdersData, isLoading: sellOrdersLoading } = useActiveOrdersAPI(1, 100);
-  const { data: fillsData, isLoading: fillsLoading } = useOrderFillsAPI(100);
-  const { data: activityData, isLoading: activityLoading } = useRecentActivityAPI(50);
+  const { data: activityData } = useRecentActivityAPI(50);
 
   const ordersLoading = buyOrdersLoading || sellOrdersLoading;
 
   // Combine orders from API
   const orders = useMemo(() => {
-    const buys = (buyOrdersData?.orders || []).map((order: any) => ({
-      ...order,
+    const buys = (buyOrdersData?.orders || []).map((order: APIOrder) => ({
       orderId: BigInt(order.orderId),
       mwgAmount: BigInt(order.mwgAmount),
       bnbAmount: BigInt(order.bnbAmount),
       pricePerMWG: BigInt(order.pricePerMWG),
-      remaining: BigInt(order.remaining),
+      remaining: BigInt(order.remaining || order.mwgAmount),
       filled: BigInt(order.filled || 0),
       user: order.user as `0x${string}`,
       expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
-      orderType: 0,
+      orderType: 0 as const,
+      status: typeof order.status === 'string' ? parseInt(order.status) : order.status,
+      createdAt: BigInt(0),
+      feeAtCreation: BigInt(order.feeAtCreation || 0),
     }));
-    const sells = (sellOrdersData?.orders || []).map((order: any) => ({
-      ...order,
+    const sells = (sellOrdersData?.orders || []).map((order: APIOrder) => ({
       orderId: BigInt(order.orderId),
       mwgAmount: BigInt(order.mwgAmount),
       bnbAmount: BigInt(order.bnbAmount),
       pricePerMWG: BigInt(order.pricePerMWG),
-      remaining: BigInt(order.remaining),
+      remaining: BigInt(order.remaining || order.mwgAmount),
       filled: BigInt(order.filled || 0),
       user: order.user as `0x${string}`,
       expiresAt: BigInt(new Date(order.expiresAt).getTime() / 1000),
-      orderType: 1,
+      orderType: 1 as const,
+      status: typeof order.status === 'string' ? parseInt(order.status) : order.status,
+      createdAt: BigInt(0),
+      feeAtCreation: BigInt(order.feeAtCreation || 0),
     }));
     return [...buys, ...sells];
   }, [buyOrdersData, sellOrdersData]);
 
   // Extract data from API responses
   const stats = statsData?.stats;
-  const fills = (fillsData as any)?.fills || [];
   const recentActivity = activityData?.activities || [];
 
   // Get statistics from API data
   const totalOrders = stats?.orders?.total || 0;
   const activeOrders = stats?.orders?.active || 0;
-  const activeBuyOrders = stats?.orders?.activeBuy || 0;
-  const activeSellOrders = stats?.orders?.activeSell || 0;
-  const totalFills = stats?.fills?.total || 0;
   const totalVolumeMWG = stats?.fills?.mwgVolume || 0;
   const totalVolumeBNB = stats?.fills?.bnbVolume || 0;
+  const totalFills = stats?.fills?.total || 0;
 
   // Admin actions
-  const { setFee, isPending: setFeePending, error: setFeeError, isSuccess: setFeeSuccess } = useSetFee();
-  const { setMinimumAmounts, isPending: setMinPending, error: setMinError, isSuccess: setMinSuccess } = useSetMinimumAmounts();
-  const { setPaused, isPending: setPausedPending, error: setPausedError, isSuccess: setPausedSuccess } = useSetPaused();
-  const { cancelOrder, isPending: cancelPending, error: cancelError, isSuccess: cancelSuccess } = useCancelOrder();
+  const { setFee, isSuccess: setFeeSuccess } = useSetFee();
+  const { setMinimumAmounts, isSuccess: setMinSuccess } = useSetMinimumAmounts();
+  const { setPaused, isSuccess: setPausedSuccess } = useSetPaused();
+  const { cancelOrder, isSuccess: cancelSuccess } = useCancelOrder();
 
   // Config form states
   const [newFeePercentage, setNewFeePercentage] = useState("");
@@ -122,6 +132,11 @@ export default function AdminPage() {
   const getFeePercentage = () => {
     if (!feePercentage) return 0;
     return Number(feePercentage) / 100;
+  };
+
+  // Simple warning toast helper (was previously referenced but not defined)
+  const showWarningToast = (message: string) => {
+    toast.error(message);
   };
 
   // Filter orders based on type
@@ -179,7 +194,7 @@ export default function AdminPage() {
         setNewMinMWG("");
         setNewMinBNB("");
       }
-    } catch (error) {
+    } catch {
       showWarningToast("Invalid amount format");
     }
   };
@@ -194,7 +209,7 @@ export default function AdminPage() {
       if (setPausedSuccess) {
         toast.success(newPauseState ? "Contract paused" : "Contract unpaused", { id: toastId });
       }
-    } catch (err) {
+    } catch {
       toast.error(`Failed to ${newPauseState ? "pause" : "unpause"} contract`, { id: toastId });
     }
   };
@@ -214,7 +229,7 @@ export default function AdminPage() {
       if (cancelSuccess) {
         toast.success(`Order #${orderId} cancelled`, { id: toastId });
       }
-    } catch (err) {
+    } catch {
       toast.error("Failed to cancel order", { id: toastId });
     }
   };
@@ -447,7 +462,7 @@ export default function AdminPage() {
             <div className="bg-gradient-to-br from-gray-800 to-gray-900 rounded-lg p-6 border border-gray-700">
               <div className="space-y-3 max-h-96 overflow-y-auto">
                 {recentActivity.length > 0 ? (
-                  recentActivity.map((activity: any, idx: number) => (
+                  recentActivity.map((activity: { type: string; data?: { orderId?: string; mwgAmount?: string }; timestamp: string }, idx: number) => (
                     <div key={idx} className="flex items-center justify-between py-2 border-b border-gray-700 last:border-0">
                       <div className="flex items-center gap-3">
                         <div className={`w-2 h-2 rounded-full ${
@@ -485,13 +500,13 @@ export default function AdminPage() {
             {/* Filter Buttons */}
             <div className="flex gap-2">
               {[
-                { id: "all", label: "All Orders" },
-                { id: "buy", label: "Buy Orders" },
-                { id: "sell", label: "Sell Orders" }
+                { id: "all" as const, label: "All Orders" },
+                { id: "buy" as const, label: "Buy Orders" },
+                { id: "sell" as const, label: "Sell Orders" }
               ].map(filter => (
                 <button
                   key={filter.id}
-                  onClick={() => setOrderFilter(filter.id as any)}
+                  onClick={() => setOrderFilter(filter.id)}
                   className={`px-4 py-2 rounded-lg font-semibold transition-colors ${
                     orderFilter === filter.id
                       ? "bg-purple-600 text-white"
@@ -690,7 +705,7 @@ export default function AdminPage() {
                 <div>
                   <p className="text-gray-300 font-semibold">Emergency Cancel Order</p>
                   <p className="text-gray-400 text-sm">
-                    Cancel any order and refund the user. Available in the "All Orders" tab.
+                    Cancel any order and refund the user. Available in the &quot;All Orders&quot; tab.
                   </p>
                 </div>
               </div>
@@ -710,7 +725,7 @@ export default function AdminPage() {
                 <div>
                   <p className="text-gray-300 font-semibold">Update Configuration</p>
                   <p className="text-gray-400 text-sm">
-                    Modify fee settings and minimum amounts in the "Configuration" tab.
+                    Modify fee settings and minimum amounts in the &quot;Configuration&quot; tab.
                   </p>
                 </div>
               </div>
@@ -728,7 +743,7 @@ export default function AdminPage() {
             setShowFillModal(false);
             setSelectedOrder(null);
           }}
-          onFill={(orderId, mwgAmount, bnbValue) => {
+          onFill={() => {
             // Fill logic handled by modal
           }}
         />

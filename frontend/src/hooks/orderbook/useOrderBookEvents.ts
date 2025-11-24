@@ -46,7 +46,7 @@ export function useOrderCreatedEvents(enabled: boolean = true) {
         enabled,
         onLogs(logs) {
             const newEvents = logs.map((log) => {
-                const args = (log as any).args;
+                const args = (log as unknown as { args: Record<string, unknown> }).args;
                 return {
                     orderId: args.orderId as bigint,
                     user: args.user as `0x${string}`,
@@ -77,14 +77,15 @@ export function useOrderFilledEvents(enabled: boolean = true) {
         enabled,
         onLogs(logs) {
             const newEvents = logs.map((log) => {
-                const args = (log as any).args;
+                const eventLog = log as unknown as { args: Record<string, unknown>; blockNumber?: bigint; transactionHash?: string };
+                const args = eventLog.args;
                 return {
                     orderId: args.orderId as bigint,
                     filler: args.filler as `0x${string}`,
                     mwgAmount: args.mwgAmount as bigint,
                     bnbAmount: args.bnbAmount as bigint,
-                    timestamp: log.blockNumber ? Math.floor(Date.now() / 1000) : undefined,
-                    transactionHash: (log.transactionHash as string | undefined) || undefined,
+                    timestamp: eventLog.blockNumber ? Math.floor(Date.now() / 1000) : undefined,
+                    transactionHash: eventLog.transactionHash || undefined,
                     orderType: 0, // Will be fetched from order details if needed
                 } as OrderFilledEvent;
             });
@@ -108,7 +109,7 @@ export function useOrderCancelledEvents(enabled: boolean = true) {
         enabled,
         onLogs(logs) {
             const newEvents = logs.map((log) => {
-                const args = (log as any).args;
+                const args = (log as unknown as { args: Record<string, unknown> }).args;
                 return {
                     orderId: args.orderId as bigint,
                     user: args.user as `0x${string}`,
@@ -134,7 +135,7 @@ export function useWithdrawalClaimedEvents(enabled: boolean = true) {
         enabled,
         onLogs(logs) {
             const newEvents = logs.map((log) => {
-                const args = (log as any).args;
+                const args = (log as unknown as { args: Record<string, unknown> }).args;
                 return {
                     user: args.user as `0x${string}`,
                     amount: args.amount as bigint,

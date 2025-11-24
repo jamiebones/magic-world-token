@@ -246,7 +246,7 @@ export function CreateSellOrderForm({
           <span className="text-white font-medium">{pricePerMWG || "0"} BNB</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">BNB You'll Receive:</span>
+          <span className="text-gray-400">BNB You&apos;ll Receive:</span>
           <span className="text-green-400 font-bold">
             {formatUnits(bnbReceiving, 18)} BNB
           </span>

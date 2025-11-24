@@ -110,7 +110,7 @@ export function useActiveOrders(offset: number = 0, limit: number = 100) {
     console.log('error:', error);
 
     // Contract returns tuple: [buyOrders[], sellOrders[], totalBuyCount, totalSellCount]
-    const result = data as [any[], any[], bigint, bigint] | undefined;
+    const result = data as [unknown[], unknown[], bigint, bigint] | undefined;
 
     console.log('Parsed result:', result);
     console.log('buyOrders (result[0]):', result?.[0]);

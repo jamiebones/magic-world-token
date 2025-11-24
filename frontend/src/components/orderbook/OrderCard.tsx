@@ -2,7 +2,6 @@
 
 import React from "react";
 import { formatUnits } from "viem";
-import toast from "react-hot-toast";
 import type { Order } from "@/types/orderbook";
 import { ORDER_TYPE_LABELS, ORDER_STATUS_LABELS } from "@/types/orderbook";
 

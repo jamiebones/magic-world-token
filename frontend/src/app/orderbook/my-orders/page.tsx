@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useEffect } from "react";
 import { useAccount } from "wagmi";
 import { useQueryClient } from "@tanstack/react-query";
 import Link from "next/link";
@@ -34,12 +34,13 @@ export default function MyOrdersPage() {
   const { isPaused } = useOrderBookPaused();
 
   // Extract orders from API response
-  const allOrders = (ordersData as any)?.orders || [];
+  // API returns Order[] with all fields: orderId, user, orderType, mwgAmount, bnbAmount, pricePerMWG, filled, remaining, status, createdAt, expiresAt
+  const allOrders = ordersData?.orders || [];
   
   // Filter orders by status
   // Status: 0=Active, 1=Filled, 2=Partially Filled, 3=Cancelled, 4=Expired
-  const activeOrders = allOrders.filter((order: any) => order.status === 0 || order.status === 2);
-  const orderIds = activeOrders.map((order: any) => BigInt(order.orderId));
+  const activeOrders = allOrders.filter(order => order.status === '0' || order.status === '2');
+  const orderIds = activeOrders.map(order => BigInt(order.orderId));
   
   // Cancel order hook
   const { cancelOrder, isPending: isCancelling, isSuccess: isCancelSuccess, error: cancelError } = useCancelOrder();
@@ -91,7 +92,7 @@ export default function MyOrdersPage() {
     try {
       await cancelOrder(orderId);
       // Toast handled by useOrderBookTransactionToast
-    } catch (error) {
+    } catch {
       // Error handled by useOrderBookTransactionToast
     }
   };
@@ -110,7 +111,7 @@ export default function MyOrdersPage() {
     try {
       await withdraw();
       // Toast handled by useOrderBookTransactionToast
-    } catch (error) {
+    } catch {
       // Error handled by useOrderBookTransactionToast
     }
   };
@@ -355,7 +356,7 @@ export default function MyOrdersPage() {
                     No Active Orders
                   </h3>
                   <p className="text-gray-400 mb-8 max-w-md mx-auto">
-                    You don't have any active orders yet. Create your first order to start trading!
+                    You don&apos;t have any active orders yet. Create your first order to start trading!
                   </p>
                   <Link
                     href="/orderbook/create"
@@ -386,19 +387,19 @@ export default function MyOrdersPage() {
 
                   {/* Orders Grid */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                    {activeOrders.map((order: any, index: number) => {
+                    {activeOrders.map((order, index: number) => {
                       const orderId = BigInt(order.orderId);
                       const orderIdString = orderId.toString();
                       
                       // Status: 0=Active, 1=Filled, 2=Partially Filled, 3=Cancelled, 4=Expired
-                      const getStatusBadge = (status: number) => {
-                        if (status === 0) {
+                      const getStatusBadge = (status: string) => {
+                        if (status === '0') {
                           return (
                             <div className="px-2 py-1 bg-green-500/10 border border-green-500/30 rounded-md text-xs text-green-400 font-medium">
                               Active
                             </div>
                           );
-                        } else if (status === 2) {
+                        } else if (status === '2') {
                           return (
                             <div className="px-2 py-1 bg-yellow-500/10 border border-yellow-500/30 rounded-md text-xs text-yellow-400 font-medium flex items-center gap-1">
                               <svg className="w-3 h-3" fill="currentColor" viewBox="0 0 20 20">
@@ -439,7 +440,7 @@ export default function MyOrdersPage() {
                             </div>
                             
                             {/* Fill Progress for Partially Filled Orders */}
-                            {order.status === 2 && (
+                            {order.status === '2' && (
                               <div className="mb-4 p-3 bg-yellow-500/5 border border-yellow-500/20 rounded-lg">
                                 <div className="flex items-center justify-between mb-2 text-xs">
                                   <span className="text-yellow-400 font-medium">Fill Progress</span>

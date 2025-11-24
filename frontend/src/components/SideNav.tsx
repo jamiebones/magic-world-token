@@ -18,7 +18,7 @@ export function SideNav() {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const pathname = usePathname();
   const { isConnected } = useAccount();
-  const { hasAnyAdminRole, isLoading, roles } = useMultiRoleGate();
+  const { hasAnyAdminRole, isLoading } = useMultiRoleGate();
 
   // Don't render sidebar if wallet is not connected
   if (!isConnected) {

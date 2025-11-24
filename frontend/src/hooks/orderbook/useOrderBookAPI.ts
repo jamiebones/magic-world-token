@@ -4,14 +4,23 @@ import { useAccount } from 'wagmi';
 const API_BASE_URL = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000';
 
 // API Response Types
-interface APIResponse<T> {
-    success: boolean;
-    data: T;
-    error?: string;
+interface Order {
+    orderId: string;
+    user: string;
+    orderType: number;
+    mwgAmount: string;
+    bnbAmount: string;
+    pricePerMWG: string;
+    filled: string;
+    remaining: string;
+    status: string;
+    createdAt: string;
+    expiresAt: string;
+    [key: string]: unknown;
 }
 
 interface OrdersData {
-    orders: any[];
+    orders: Order[];
     total: number;
     limit: number;
     offset: number;
@@ -55,15 +64,15 @@ interface BestPricesData {
     } | null;
 }
 
-interface FillsData {
-    fills: any[];
-    total: number;
-    limit: number;
-    offset: number;
+interface Activity {
+    type: string;
+    orderId: string;
+    timestamp: string;
+    [key: string]: unknown;
 }
 
 interface ActivityData {
-    activities: any[];
+    activities: Activity[];
 }
 
 /**
@@ -131,7 +140,7 @@ export function useUserOrdersAPI(address?: string, status?: number, limit = 50, 
     const { address: connectedAddress } = useAccount();
     const userAddress = address || connectedAddress;
 
-    return useQuery({
+    return useQuery<OrdersData>({
         queryKey: ['orderbook', 'user-orders', userAddress, status, limit, offset],
         queryFn: () => {
             const params = new URLSearchParams({
@@ -141,7 +150,7 @@ export function useUserOrdersAPI(address?: string, status?: number, limit = 50, 
             if (status !== undefined) {
                 params.append('status', status.toString());
             }
-            return fetchAPI(`/api/orderbook/user/${userAddress}/orders?${params}`);
+            return fetchAPI<OrdersData>(`/api/orderbook/user/${userAddress}/orders?${params}`);
         },
         enabled: !!userAddress,
         refetchInterval: 5000,

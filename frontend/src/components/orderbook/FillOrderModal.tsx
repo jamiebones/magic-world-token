@@ -5,7 +5,7 @@ import { formatUnits, parseUnits } from "viem";
 import { useAccount } from "wagmi";
 import toast from "react-hot-toast";
 import type { Order } from "@/types/orderbook";
-import { OrderType, ORDER_TYPE_LABELS } from "@/types/orderbook";
+import { ORDER_TYPE_LABELS } from "@/types/orderbook";
 import { useMWGBalance, useMWGAllowance, useApproveMWG } from "@/hooks/orderbook/useOrderBookActions";
 import { useOrderBookTransactionToast } from "@/hooks/orderbook/useOrderBookToasts";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
@@ -42,11 +42,6 @@ export function FillOrderModal({
     "✅ MWG tokens approved successfully!"
   );
 
-  if (!isOpen || !order) return null;
-
-  const isBuyOrder = order.orderType === 0;
-  const maxFill = order.remaining;
-
   // Refetch allowance when approval succeeds
   useEffect(() => {
     if (isApproved) {
@@ -57,6 +52,11 @@ export function FillOrderModal({
       return () => clearTimeout(timer);
     }
   }, [isApproved, refetchAllowance]);
+
+  if (!isOpen || !order) return null;
+
+  const isBuyOrder = order.orderType === 0;
+  const maxFill = order.remaining;
 
   const calculateRequiredAmount = () => {
     if (!fillAmount) return BigInt(0);
