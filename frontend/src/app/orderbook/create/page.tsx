@@ -397,47 +397,6 @@ export default function CreateOrderPage() {
               />
             )}
           </div>
-
-          {/* Info Section */}
-          <div className="mt-8 bg-blue-500/10 border border-blue-500/20 rounded-xl p-6">
-            <h3 className="text-lg font-bold text-blue-400 mb-3">
-              ℹ️ How Buy Orders Work
-            </h3>
-            <ul className="space-y-2 text-sm text-gray-300">
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-1">•</span>
-                <span>
-                  You deposit BNB and specify the amount of MWG you want to buy and
-                  the price per MWG
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-1">•</span>
-                <span>
-                  When someone fills your order, they send you MWG and receive your
-                  BNB
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-1">•</span>
-                <span>
-                  Orders can be partially filled - you&apos;ll receive MWG proportionally
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-1">•</span>
-                <span>
-                  You can cancel active orders anytime to get your BNB back
-                </span>
-              </li>
-              <li className="flex items-start gap-2">
-                <span className="text-blue-400 mt-1">•</span>
-                <span>
-                  Set expiry time to automatically cancel if not filled in time
-                </span>
-              </li>
-            </ul>
-          </div>
         </div>
       </main>
     </div>

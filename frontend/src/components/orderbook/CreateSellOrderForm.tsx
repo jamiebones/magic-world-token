@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { parseUnits, formatUnits } from "viem";
 import toast from "react-hot-toast";
 import { ORDER_BOOK_CONFIG } from "@/config/contracts";
+import { fetchBnbPrice } from "@/utils/fetchBnbPrice";
 
 export interface CreateSellOrderFormProps {
   onSubmit: (mwgAmount: bigint, pricePerMWG: bigint, expirySeconds: bigint, email?: string) => void;
@@ -29,22 +30,60 @@ export function CreateSellOrderForm({
   allowance = BigInt(0),
 }: CreateSellOrderFormProps) {
   const [mwgAmount, setMwgAmount] = useState("");
-  const [pricePerMWG, setPricePerMWG] = useState("");
-  const [expiryPreset, setExpiryPreset] = useState(86400); // 24 hours default
-  const [email, setEmail] = useState("");
+  const [priceUsd, setPriceUsd] = useState("");
 
-  const calculateBNBReceiving = () => {
-    if (!mwgAmount || !pricePerMWG) return BigInt(0);
+  // Allow only valid decimal number input
+  const handleDecimalInput = (value: string, setter: (v: string) => void) => {
+    if (value === "" || /^\d*\.?\d*$/.test(value)) {
+      setter(value);
+    }
+  };
+  const [expiryPreset, setExpiryPreset] = useState(86400);
+  const [email, setEmail] = useState("");
+  const [bnbUsdPrice, setBnbUsdPrice] = useState<number | null>(null);
+
+  // Fetch BNB price in USD
+  useEffect(() => {
+    const getBnbPrice = async () => {
+      try {
+        const price = await fetchBnbPrice();
+        setBnbUsdPrice(price);
+      } catch (error) {
+        console.error('Failed to fetch BNB price:', error);
+      }
+    };
+    getBnbPrice();
+    const interval = setInterval(getBnbPrice, 60000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Derive BNB price per MWG from user's USD price input
+  const pricePerMWGinBNB = (priceUsd && bnbUsdPrice && bnbUsdPrice > 0)
+    ? parseFloat(priceUsd) / bnbUsdPrice
+    : 0;
+
+  const pricePerMWGBigInt = (() => {
+    if (pricePerMWGinBNB <= 0) return BigInt(0);
     try {
-      const mwg = parseUnits(mwgAmount, 18);
-      const price = parseUnits(pricePerMWG, 18);
-      return (mwg * price) / parseUnits("1", 18);
+      return parseUnits(pricePerMWGinBNB.toFixed(18), 18);
     } catch {
       return BigInt(0);
     }
-  };
+  })();
 
-  const bnbReceiving = calculateBNBReceiving();
+  const bnbReceiving = (() => {
+    if (!mwgAmount || pricePerMWGBigInt === BigInt(0)) return BigInt(0);
+    try {
+      const mwg = parseUnits(mwgAmount, 18);
+      return (mwg * pricePerMWGBigInt) / parseUnits("1", 18);
+    } catch {
+      return BigInt(0);
+    }
+  })();
+
+  const totalValueUsd = mwgAmount && priceUsd
+    ? parseFloat(mwgAmount) * parseFloat(priceUsd)
+    : 0;
 
   const needsApproval = () => {
     if (!mwgAmount) return false;
@@ -61,7 +100,6 @@ export function CreateSellOrderForm({
       toast.error("Please enter MWG amount first");
       return;
     }
-
     try {
       const mwg = parseUnits(mwgAmount, 18);
       onApprove(mwg);
@@ -71,10 +109,29 @@ export function CreateSellOrderForm({
     }
   };
 
+  const useSuggestedPrice = () => {
+    if (currentMarketPrice && bnbUsdPrice) {
+      const bnbPrice = parseFloat(formatUnits(currentMarketPrice, 18));
+      const usd = bnbPrice * bnbUsdPrice;
+      setPriceUsd(usd.toFixed(6));
+    }
+  };
+
+  const useMaxBalance = () => {
+    if (mwgBalance) {
+      setMwgAmount(formatUnits(mwgBalance, 18));
+    }
+  };
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!mwgAmount || !pricePerMWG) {
+    if (!mwgAmount || !priceUsd) {
       toast.error("Please fill in all required fields");
+      return;
+    }
+
+    if (!bnbUsdPrice || bnbUsdPrice <= 0) {
+      toast.error("BNB price not available. Please try again.");
       return;
     }
 
@@ -85,7 +142,6 @@ export function CreateSellOrderForm({
 
     try {
       const mwg = parseUnits(mwgAmount, 18);
-      const price = parseUnits(pricePerMWG, 18);
       const expiry = BigInt(expiryPreset);
 
       if (mwg < minMWGAmount) {
@@ -103,28 +159,15 @@ export function CreateSellOrderForm({
         return;
       }
 
-      // Validate email if provided
       if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
         toast.error("Invalid email format");
         return;
       }
 
-      onSubmit(mwg, price, expiry, email || undefined);
+      onSubmit(mwg, pricePerMWGBigInt, expiry, email || undefined);
     } catch (error) {
       console.error("Error creating order:", error);
       toast.error("Invalid input values");
-    }
-  };
-
-  const useSuggestedPrice = () => {
-    if (currentMarketPrice) {
-      setPricePerMWG(formatUnits(currentMarketPrice, 18));
-    }
-  };
-
-  const useMaxBalance = () => {
-    if (mwgBalance) {
-      setMwgAmount(formatUnits(mwgBalance, 18));
     }
   };
 
@@ -145,27 +188,24 @@ export function CreateSellOrderForm({
           </button>
         </div>
         <input
-          type="number"
-          step="any"
+          type="text"
+          inputMode="decimal"
           value={mwgAmount}
-          onChange={(e) => setMwgAmount(e.target.value)}
+          onChange={(e) => handleDecimalInput(e.target.value, setMwgAmount)}
           placeholder={`Min: ${formatUnits(minMWGAmount, 18)} MWG`}
           className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
           required
           disabled={isPending || isApprovePending}
         />
-        <p className="text-xs text-gray-400 mt-1">
-          Available: {formatUnits(mwgBalance, 18)} MWG
-        </p>
       </div>
 
-      {/* Price Per MWG */}
+      {/* Price Per MWG in USD */}
       <div>
         <div className="flex justify-between items-center mb-2">
           <label className="block text-sm font-medium text-gray-300">
-            Price Per MWG (in BNB)
+            Price Per MWG (in USD)
           </label>
-          {currentMarketPrice && (
+          {currentMarketPrice && bnbUsdPrice && (
             <button
               type="button"
               onClick={useSuggestedPrice}
@@ -175,33 +215,32 @@ export function CreateSellOrderForm({
             </button>
           )}
         </div>
-        <input
-          type="number"
-          step="any"
-          value={pricePerMWG}
-          onChange={(e) => setPricePerMWG(e.target.value)}
-          placeholder="0.00001"
-          className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
-          required
-          disabled={isPending || isApprovePending}
-        />
-        {currentMarketPrice && (
+        <div className="relative">
+          <span className="absolute left-4 top-1/2 -translate-y-1/2 text-gray-400">$</span>
+          <input
+            type="text"
+            inputMode="decimal"
+            value={priceUsd}
+            onChange={(e) => handleDecimalInput(e.target.value, setPriceUsd)}
+            placeholder="0.01"
+            className="w-full pl-8 pr-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
+            required
+            disabled={isPending || isApprovePending}
+          />
+        </div>
+        {priceUsd && bnbUsdPrice && (
           <p className="text-xs text-gray-400 mt-1">
-            Market price: {formatUnits(currentMarketPrice, 18)} BNB
+            ≈ {pricePerMWGinBNB.toFixed(10)} BNB per MWG
+            <span className="text-gray-500 ml-2">(1 BNB = ${bnbUsdPrice.toFixed(2)})</span>
           </p>
         )}
       </div>
 
-      {/* Email for Notifications (Optional) */}
+      {/* Email for Notifications */}
       <div>
-        <div className="flex items-center gap-2 mb-2">
-          <label className="block text-sm font-medium text-gray-300">
-            Email for Fill Notifications (Optional)
-          </label>
-          <span className="text-xs text-gray-500" title="Get notified when your order is filled">
-            ℹ️
-          </span>
-        </div>
+        <label className="block text-sm font-medium text-gray-300 mb-2">
+          Email for Notifications <span className="text-gray-500">(optional)</span>
+        </label>
         <input
           type="email"
           value={email}
@@ -210,9 +249,6 @@ export function CreateSellOrderForm({
           className="w-full px-4 py-3 bg-gray-700 border border-gray-600 rounded-lg text-white placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-purple-500"
           disabled={isPending || isApprovePending}
         />
-        <p className="text-xs text-gray-400 mt-1">
-          📧 Receive an email when someone fills your order
-        </p>
       </div>
 
       {/* Expiry Time */}
@@ -234,19 +270,23 @@ export function CreateSellOrderForm({
         </select>
       </div>
 
-      {/* Order Preview */}
+      {/* Order Summary */}
       <div className="bg-gray-700/50 rounded-lg p-4 space-y-2">
-        <h4 className="font-medium text-white mb-2">Order Preview</h4>
+        <h4 className="font-medium text-white mb-2">Order Summary</h4>
         <div className="flex justify-between text-sm">
           <span className="text-gray-400">MWG Amount:</span>
           <span className="text-white font-medium">{mwgAmount || "0"} MWG</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">Price Per MWG:</span>
-          <span className="text-white font-medium">{pricePerMWG || "0"} BNB</span>
+          <span className="text-gray-400">Price per MWG:</span>
+          <span className="text-white font-medium">${priceUsd || "0"}</span>
         </div>
         <div className="flex justify-between text-sm">
-          <span className="text-gray-400">BNB You&apos;ll Receive:</span>
+          <span className="text-gray-400">Total Value (USD):</span>
+          <span className="text-white font-medium">${totalValueUsd.toFixed(2)}</span>
+        </div>
+        <div className="flex justify-between text-sm border-t border-gray-600 pt-2">
+          <span className="text-gray-400 font-medium">BNB You&apos;ll Receive:</span>
           <span className="text-green-400 font-bold">
             {formatUnits(bnbReceiving, 18)} BNB
           </span>
@@ -267,68 +307,22 @@ export function CreateSellOrderForm({
           disabled={isApprovePending || !mwgAmount}
           className="w-full bg-gradient-to-r from-yellow-600 to-orange-600 hover:from-yellow-700 hover:to-orange-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-lg transition-all disabled:cursor-not-allowed"
         >
-          {isApprovePending ? (
-            <span className="flex items-center justify-center gap-2">
-              <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-                <circle
-                  className="opacity-25"
-                  cx="12"
-                  cy="12"
-                  r="10"
-                  stroke="currentColor"
-                  strokeWidth="4"
-                  fill="none"
-                />
-                <path
-                  className="opacity-75"
-                  fill="currentColor"
-                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-                />
-              </svg>
-              Approving...
-            </span>
-          ) : (
-            "1. Approve MWG Tokens"
-          )}
+          {isApprovePending ? "Approving..." : "1. Approve MWG Tokens"}
         </button>
       )}
 
       {/* Submit Button */}
       <button
         type="submit"
-        disabled={isPending || needsApproval() || !mwgAmount || !pricePerMWG}
+        disabled={isPending || needsApproval() || !mwgAmount || !priceUsd || !bnbUsdPrice}
         className="w-full bg-gradient-to-r from-red-600 to-pink-600 hover:from-red-700 hover:to-pink-700 disabled:from-gray-600 disabled:to-gray-700 text-white font-bold py-4 px-6 rounded-lg transition-all disabled:cursor-not-allowed"
       >
-        {isPending ? (
-          <span className="flex items-center justify-center gap-2">
-            <svg className="animate-spin h-5 w-5" viewBox="0 0 24 24">
-              <circle
-                className="opacity-25"
-                cx="12"
-                cy="12"
-                r="10"
-                stroke="currentColor"
-                strokeWidth="4"
-                fill="none"
-              />
-              <path
-                className="opacity-75"
-                fill="currentColor"
-                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
-              />
-            </svg>
-            Creating Sell Order...
-          </span>
-        ) : needsApproval() ? (
-          "2. Create Sell Order"
-        ) : (
-          "Create Sell Order"
-        )}
+        {isPending
+          ? "Creating Sell Order..."
+          : needsApproval()
+          ? "2. Create Sell Order"
+          : `Create Sell Order — ${formatUnits(bnbReceiving, 18)} BNB`}
       </button>
-
-      <p className="text-xs text-gray-400 text-center">
-        You will deposit {mwgAmount || "0"} MWG and receive {formatUnits(bnbReceiving, 18)} BNB when your order is filled
-      </p>
     </form>
   );
 }
