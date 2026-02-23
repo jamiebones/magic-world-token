@@ -44,7 +44,22 @@ export function useOrderBookTransactionToast(
 
     useEffect(() => {
         if (error && !hasShownError.current) {
-            toast.error(`❌ ${actionName} failed: ${error.message}`, {
+            // Parse error message for better user experience
+            let errorMessage = error.message;
+            
+            if (errorMessage.includes("Requested resource not available") || 
+                errorMessage.includes("RPC endpoint returned too many errors")) {
+                errorMessage = "Network connection issue. Please check your internet connection and try again.";
+            } else if (errorMessage.includes("User rejected") || errorMessage.includes("User denied")) {
+                errorMessage = "Transaction rejected by user.";
+            } else if (errorMessage.includes("insufficient funds")) {
+                errorMessage = "Insufficient funds in your wallet.";
+            } else if (errorMessage.length > 100) {
+                // Truncate very long error messages
+                errorMessage = errorMessage.substring(0, 100) + "...";
+            }
+            
+            toast.error(`❌ ${actionName} failed: ${errorMessage}`, {
                 id: actionName,
                 duration: 7000
             });

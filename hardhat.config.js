@@ -4,6 +4,26 @@ require("hardhat-gas-reporter");
 require("solidity-coverage");
 require("dotenv").config();
 
+
+const fs = require("fs");
+const path = require("path");
+const { Wallet } = require("ethers");
+
+function loadWalletFromKeystore() {
+    const keystorePath = path.join(__dirname, "keystore");
+    const files = fs.readdirSync(keystorePath).filter(f => f.endsWith(".json"));
+    if (files.length === 0) throw new Error("No keystore file found in keystore/");
+    const json = fs.readFileSync(path.join(keystorePath, files[0]), "utf8");
+    const password = process.env.KEY_PASSWORD;
+    if (!password) throw new Error("Set KEY_PASSWORD in .env");
+    const wallet = Wallet.fromEncryptedJsonSync(json, password);
+    return wallet;
+}
+
+const wallet = loadWalletFromKeystore();
+
+
+
 /** @type import('hardhat/config').HardhatUserConfig */
 module.exports = {
     solidity: {
@@ -11,11 +31,10 @@ module.exports = {
         settings: {
             optimizer: {
                 enabled: true,
-                runs: 200,
+                runs: 800, // Increased from 200 - optimizes for runtime gas efficiency
             },
-            // viaIR disabled for better debugging and view function compatibility
-            // Enable only if contract size exceeds 24KB limit
-            viaIR: false,
+            
+            viaIR: true,
         },
     },
     networks: {
@@ -39,28 +58,28 @@ module.exports = {
         },
         polygonAmoy: {
             url: process.env.POLYGON_AMOY_RPC_URL || "https://rpc-amoy.polygon.technology",
-            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            accounts: wallet.privateKey ? [wallet.privateKey] : [],
             chainId: 80002,
             gasPrice: 35000000000, // 35 gwei
             gas: 6000000,
         },
         polygon: {
             url: process.env.POLYGON_RPC_URL || "https://polygon-rpc.com",
-            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            accounts: wallet.privateKey ? [wallet.privateKey] : [],
             chainId: 137,
             gasPrice: 200000000000, // 200 gwei (adjust based on network conditions)
             gas: 6000000,
         },
         bscTestnet: {
             url: process.env.BSC_TESTNET_RPC_URL || "https://data-seed-prebsc-1-s1.binance.org:8545/",
-            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            accounts: wallet.privateKey ? [wallet.privateKey] : [],
             chainId: 97,
             gasPrice: 10000000000, // 10 gwei
             gas: 6000000,
         },
         bsc: {
             url: process.env.BSC_MAINNET_RPC_URL || "https://bsc-dataseed1.binance.org/",
-            accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+            accounts: wallet.privateKey ? [wallet.privateKey] : [],
             chainId: 56,
             gasPrice: 5000000000, // 5 gwei
             gas: 6000000,

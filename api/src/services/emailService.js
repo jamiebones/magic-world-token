@@ -8,7 +8,7 @@ const logger = require('../utils/logger');
 class EmailService {
   constructor() {
     this.transporter = null;
-    this.enabled = process.env.EMAIL_ALERTS_ENABLED === 'true';
+    this.enabled = process.env.EMAIL_ALERTS_ENABLED || false;
     this.from = process.env.EMAIL_FROM || 'alerts@magicworld.com';
     this.initialized = false;
   }

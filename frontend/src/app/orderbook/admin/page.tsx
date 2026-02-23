@@ -128,7 +128,9 @@ export default function AdminPage() {
   const [newMinMWG, setNewMinMWG] = useState("");
   const [newMinBNB, setNewMinBNB] = useState("");
 
-  // Helper to safely convert fee BigInt to percentage
+  // Helper to safely convert fee from basis points to percentage
+  // Basis points: 100 basis points = 1%, 500 basis points = 5%, etc.
+  // So divide by 100 to convert: 500 / 100 = 5%
   const getFeePercentage = () => {
     if (!feePercentage) return 0;
     return Number(feePercentage) / 100;
