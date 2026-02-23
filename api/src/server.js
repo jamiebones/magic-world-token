@@ -36,8 +36,8 @@ const corsOptions = {
 
         // Get allowed origins from environment variable
         const allowedOrigins = process.env.CORS_ORIGIN
-            ? process.env.CORS_ORIGIN.split(',')
-            : ['http://localhost:3000', 'http://localhost:3001'];
+            ? process.env.CORS_ORIGIN.split(',').map(o => o.trim())
+            : ['http://localhost:3000', 'http://localhost:3001', 'https://magic-world-token.vercel.app'];
 
         if (allowedOrigins.indexOf(origin) !== -1 || allowedOrigins.includes('*')) {
             callback(null, true);
