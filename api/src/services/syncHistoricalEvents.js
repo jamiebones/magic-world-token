@@ -170,7 +170,7 @@ async function syncHistoricalEvents(config) {
 
                     const order = await Order.findOne({ orderId: orderId.toString() });
                     if (order) {
-                        await order.updateStatus(2); // Cancelled
+                        await order.updateStatus(3); // Cancelled (OrderStatus.CANCELLED = 3)
                         totalOrdersCancelled++;
                         logger.debug(`[OrderBook Sync] Cancelled order ${orderId}`);
                     }

@@ -16,6 +16,7 @@ interface Order {
     status: number;
     createdAt: string;
     expiresAt: string;
+    txHash?: string;
     [key: string]: unknown;
 }
 

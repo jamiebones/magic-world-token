@@ -873,12 +873,23 @@ router.post('/admin/sync', async (req, res) => {
     try {
         const { fromBlock, toBlock, batchSize } = req.body;
 
-        // Get config from environment
+        // Get config from environment (matching server.js variable names)
+        const network = process.env.BLOCKCHAIN_NETWORK || 'bscTestnet';
+        const contractAddress = network === 'bsc'
+            ? process.env.ORDERBOOK_CONTRACT_ADDRESS_MAINNET
+            : process.env.ORDERBOOK_CONTRACT_ADDRESS_TESTNET;
+        const rpcUrl = network === 'bsc'
+            ? process.env.BSC_MAINNET_RPC_URL
+            : process.env.BSC_TESTNET_RPC_URL;
+        const startBlock = network === 'bsc'
+            ? process.env.ORDERBOOK_START_BLOCK_MAINNET || 0
+            : process.env.ORDERBOOK_START_BLOCK_TESTNET || 0;
+
         const config = {
-            contractAddress: process.env.ORDERBOOK_CONTRACT_ADDRESS_TESTNET || process.env.ORDERBOOK_CONTRACT_ADDRESS_MAINNET,
-            network: process.env.NETWORK || 'bscTestnet',
-            rpcUrl: process.env.BSC_TESTNET_RPC || process.env.BSC_MAINNET_RPC,
-            fromBlock: fromBlock || parseInt(process.env.ORDERBOOK_START_BLOCK_TESTNET || '0'),
+            contractAddress,
+            network,
+            rpcUrl,
+            fromBlock: fromBlock || parseInt(startBlock, 10),
             toBlock: toBlock || 'latest',
             batchSize: batchSize || 1000
         };

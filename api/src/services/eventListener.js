@@ -86,10 +86,13 @@ class OrderBookEventListener {
     logger.info('[OrderBook Starting event listener...');
 
     try {
-      // Set up event listeners
+      // Catch up on any missed events since last synced block
+      await this.catchUpMissedEvents();
+
+      // Set up event listeners for real-time events going forward
       this.setupEventListeners();
 
-      // Start polling for new blocks
+      // Start polling for new blocks (with catch-up)
       this.startBlockPolling();
 
       logger.info('[OrderBook Event listener started successfully');
@@ -198,7 +201,130 @@ class OrderBookEventListener {
   }
 
   /**
-   * Start polling for new blocks to update checkpoint
+   * Catch up on any events missed since the last synced block
+   * This handles server restarts and connection drops
+   */
+  async catchUpMissedEvents() {
+    try {
+      const currentBlock = await this.provider.getBlockNumber();
+      const lastSynced = this.checkpoint.lastSyncedBlock || this.startBlock;
+
+      if (currentBlock <= lastSynced) {
+        logger.info('[OrderBook] No missed blocks to catch up on');
+        return;
+      }
+
+      const gap = currentBlock - lastSynced;
+      logger.info(`[OrderBook] Catching up on ${gap} missed blocks (${lastSynced + 1} to ${currentBlock})`);
+
+      // Process in batches of 2000 blocks to avoid RPC limits
+      const BATCH_SIZE = 2000;
+      let fromBlock = lastSynced + 1;
+
+      while (fromBlock <= currentBlock) {
+        const toBlock = Math.min(fromBlock + BATCH_SIZE - 1, currentBlock);
+        logger.info(`[OrderBook] Querying events for blocks ${fromBlock}-${toBlock}`);
+
+        try {
+          // Query all event types in parallel
+          const [orderCreatedEvents, orderFilledEvents, orderCancelledEvents, withdrawalEvents] = await Promise.all([
+            this.contract.queryFilter('OrderCreated', fromBlock, toBlock),
+            this.contract.queryFilter('OrderFilled', fromBlock, toBlock),
+            this.contract.queryFilter('OrderCancelled', fromBlock, toBlock),
+            this.contract.queryFilter('WithdrawalClaimed', fromBlock, toBlock)
+          ]);
+
+          // Process OrderCreated events
+          for (const event of orderCreatedEvents) {
+            try {
+              const [orderId, user, orderType, mwgAmount, bnbAmount, pricePerMWG, expiresAt] = event.args;
+              await this.handleOrderCreatedEvent({
+                orderId: orderId.toString(),
+                user,
+                orderType: Number(orderType),
+                mwgAmount: mwgAmount.toString(),
+                bnbAmount: bnbAmount.toString(),
+                pricePerMWG: pricePerMWG.toString(),
+                expiresAt: Number(expiresAt),
+                txHash: event.transactionHash,
+                blockNumber: event.blockNumber
+              });
+            } catch (error) {
+              logger.error(`[OrderBook] Error processing missed OrderCreated:`, error);
+            }
+          }
+
+          // Process OrderFilled events
+          for (const event of orderFilledEvents) {
+            try {
+              const [orderId, fillId, filler, mwgAmount, bnbAmount, newStatus] = event.args;
+              await this.handleOrderFilledEvent({
+                orderId: orderId.toString(),
+                fillId: fillId.toString(),
+                filler,
+                mwgAmount: mwgAmount.toString(),
+                bnbAmount: bnbAmount.toString(),
+                newStatus: Number(newStatus),
+                txHash: event.transactionHash,
+                blockNumber: event.blockNumber
+              });
+            } catch (error) {
+              logger.error(`[OrderBook] Error processing missed OrderFilled:`, error);
+            }
+          }
+
+          // Process OrderCancelled events
+          for (const event of orderCancelledEvents) {
+            try {
+              const [orderId, user, bnbRefund, mwgRefund] = event.args;
+              await this.handleOrderCancelledEvent({
+                orderId: orderId.toString(),
+                user,
+                bnbRefund: bnbRefund.toString(),
+                mwgRefund: mwgRefund.toString(),
+                txHash: event.transactionHash,
+                blockNumber: event.blockNumber
+              });
+            } catch (error) {
+              logger.error(`[OrderBook] Error processing missed OrderCancelled:`, error);
+            }
+          }
+
+          // Process WithdrawalClaimed events
+          for (const event of withdrawalEvents) {
+            try {
+              const [user, amount] = event.args;
+              await this.handleWithdrawalClaimedEvent({
+                user,
+                amount: amount.toString(),
+                txHash: event.transactionHash,
+                blockNumber: event.blockNumber
+              });
+            } catch (error) {
+              logger.error(`[OrderBook] Error processing missed WithdrawalClaimed:`, error);
+            }
+          }
+
+          logger.info(`[OrderBook] Batch complete: ${orderCreatedEvents.length} created, ${orderFilledEvents.length} filled, ${orderCancelledEvents.length} cancelled, ${withdrawalEvents.length} withdrawals`);
+        } catch (batchError) {
+          logger.error(`[OrderBook] Error querying batch ${fromBlock}-${toBlock}:`, batchError);
+          // Continue with next batch instead of failing completely
+        }
+
+        // Update checkpoint after each batch
+        await this.checkpoint.updateCheckpoint(toBlock, 'synced');
+        fromBlock = toBlock + 1;
+      }
+
+      logger.info('[OrderBook] Catch-up complete');
+    } catch (error) {
+      logger.error('[OrderBook] Error during catch-up:', error);
+      // Don't throw - allow real-time listener to start even if catch-up fails
+    }
+  }
+
+  /**
+   * Start polling for new blocks and catch up on any missed events
    */
   startBlockPolling() {
     // Clear any existing interval first to prevent duplicates
@@ -209,8 +335,18 @@ class OrderBookEventListener {
     this.pollingIntervalId = setInterval(async () => {
       try {
         const currentBlock = await this.provider.getBlockNumber();
+        const lastSynced = this.checkpoint.lastSyncedBlock;
 
-        if (currentBlock > this.checkpoint.lastSyncedBlock) {
+        // If there's a gap larger than 1 block, catch up on missed events
+        if (currentBlock > lastSynced + 1) {
+          const gap = currentBlock - lastSynced;
+          if (gap > 2) {
+            logger.info(`[OrderBook] Detected ${gap} block gap, catching up missed events`);
+            await this.catchUpMissedEvents();
+          }
+        }
+
+        if (currentBlock > lastSynced) {
           await this.checkpoint.updateCheckpoint(currentBlock, 'synced');
         }
       } catch (error) {
