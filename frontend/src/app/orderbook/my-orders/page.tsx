@@ -351,14 +351,14 @@ export default function MyOrdersPage() {
                     key={tab.key}
                     onClick={() => setActiveTab(tab.key)}
                     className={`flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium transition-all ${activeTab === tab.key
-                        ? "bg-purple-600 text-white shadow-lg shadow-purple-500/30"
-                        : "bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-300 border border-gray-700"
+                      ? "bg-purple-600 text-white shadow-lg shadow-purple-500/30"
+                      : "bg-gray-800/50 text-gray-400 hover:bg-gray-700/50 hover:text-gray-300 border border-gray-700"
                       }`}
                   >
                     {tab.label}
                     <span className={`px-2 py-0.5 rounded-full text-xs font-bold ${activeTab === tab.key
-                        ? "bg-white/20 text-white"
-                        : "bg-gray-700 text-gray-400"
+                      ? "bg-white/20 text-white"
+                      : "bg-gray-700 text-gray-400"
                       }`}>
                       {tab.count}
                     </span>
@@ -487,8 +487,8 @@ export default function MyOrdersPage() {
                               <div className="h-2 bg-gray-800 rounded-full overflow-hidden">
                                 <div
                                   className={`h-full rounded-full transition-all duration-500 ${status === 1
-                                      ? "bg-gradient-to-r from-blue-500 to-cyan-500"
-                                      : "bg-gradient-to-r from-yellow-500 to-orange-500"
+                                    ? "bg-gradient-to-r from-blue-500 to-cyan-500"
+                                    : "bg-gradient-to-r from-yellow-500 to-orange-500"
                                     }`}
                                   style={{ width: `${Math.min(fillPercent, 100)}%` }}
                                 ></div>

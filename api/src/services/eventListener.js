@@ -202,9 +202,16 @@ class OrderBookEventListener {
 
   /**
    * Catch up on any events missed since the last synced block
-   * This handles server restarts and connection drops
+   * This handles server restarts and connection drops.
+   * Queries are done sequentially with delays to avoid RPC rate limits.
    */
   async catchUpMissedEvents() {
+    if (this._isCatchingUp) {
+      logger.info('[OrderBook] Catch-up already in progress, skipping');
+      return;
+    }
+    this._isCatchingUp = true;
+
     try {
       const currentBlock = await this.provider.getBlockNumber();
       const lastSynced = this.checkpoint.lastSyncedBlock || this.startBlock;
@@ -226,13 +233,17 @@ class OrderBookEventListener {
         logger.info(`[OrderBook] Querying events for blocks ${fromBlock}-${toBlock}`);
 
         try {
-          // Query all event types in parallel
-          const [orderCreatedEvents, orderFilledEvents, orderCancelledEvents, withdrawalEvents] = await Promise.all([
-            this.contract.queryFilter('OrderCreated', fromBlock, toBlock),
-            this.contract.queryFilter('OrderFilled', fromBlock, toBlock),
-            this.contract.queryFilter('OrderCancelled', fromBlock, toBlock),
-            this.contract.queryFilter('WithdrawalClaimed', fromBlock, toBlock)
-          ]);
+          // Query event types SEQUENTIALLY with delays to avoid rate limits
+          const orderCreatedEvents = await this._queryWithRetry('OrderCreated', fromBlock, toBlock);
+          await this._delay(500);
+
+          const orderFilledEvents = await this._queryWithRetry('OrderFilled', fromBlock, toBlock);
+          await this._delay(500);
+
+          const orderCancelledEvents = await this._queryWithRetry('OrderCancelled', fromBlock, toBlock);
+          await this._delay(500);
+
+          const withdrawalEvents = await this._queryWithRetry('WithdrawalClaimed', fromBlock, toBlock);
 
           // Process OrderCreated events
           for (const event of orderCreatedEvents) {
@@ -308,23 +319,64 @@ class OrderBookEventListener {
           logger.info(`[OrderBook] Batch complete: ${orderCreatedEvents.length} created, ${orderFilledEvents.length} filled, ${orderCancelledEvents.length} cancelled, ${withdrawalEvents.length} withdrawals`);
         } catch (batchError) {
           logger.error(`[OrderBook] Error querying batch ${fromBlock}-${toBlock}:`, batchError);
-          // Continue with next batch instead of failing completely
+          // Wait before retrying next batch to let rate limit cool down
+          await this._delay(3000);
         }
 
         // Update checkpoint after each batch
         await this.checkpoint.updateCheckpoint(toBlock, 'synced');
         fromBlock = toBlock + 1;
+
+        // Delay between batches to avoid rate limits
+        if (fromBlock <= currentBlock) {
+          await this._delay(1000);
+        }
       }
 
       logger.info('[OrderBook] Catch-up complete');
     } catch (error) {
       logger.error('[OrderBook] Error during catch-up:', error);
       // Don't throw - allow real-time listener to start even if catch-up fails
+    } finally {
+      this._isCatchingUp = false;
     }
   }
 
   /**
-   * Start polling for new blocks and catch up on any missed events
+   * Query contract events with retry and exponential backoff for rate limits
+   */
+  async _queryWithRetry(eventName, fromBlock, toBlock, maxRetries = 3) {
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        return await this.contract.queryFilter(eventName, fromBlock, toBlock);
+      } catch (error) {
+        const isRateLimit = error.message?.includes('rate limit') ||
+          error.code === 'BAD_DATA' ||
+          error.code === -32005;
+
+        if (isRateLimit && attempt < maxRetries) {
+          const backoff = attempt * 2000; // 2s, 4s, 6s
+          logger.warn(`[OrderBook] Rate limited querying ${eventName}, retrying in ${backoff}ms (attempt ${attempt}/${maxRetries})`);
+          await this._delay(backoff);
+        } else {
+          throw error;
+        }
+      }
+    }
+    return [];
+  }
+
+  /**
+   * Promise-based delay helper
+   */
+  _delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Start polling for new blocks to update checkpoint.
+   * Catch-up only runs on startup via start() — polling just tracks the latest block.
+   * Real-time events are handled by contract.on() listeners set up in setupEventListeners().
    */
   startBlockPolling() {
     // Clear any existing interval first to prevent duplicates
@@ -336,15 +388,6 @@ class OrderBookEventListener {
       try {
         const currentBlock = await this.provider.getBlockNumber();
         const lastSynced = this.checkpoint.lastSyncedBlock;
-
-        // If there's a gap larger than 1 block, catch up on missed events
-        if (currentBlock > lastSynced + 1) {
-          const gap = currentBlock - lastSynced;
-          if (gap > 2) {
-            logger.info(`[OrderBook] Detected ${gap} block gap, catching up missed events`);
-            await this.catchUpMissedEvents();
-          }
-        }
 
         if (currentBlock > lastSynced) {
           await this.checkpoint.updateCheckpoint(currentBlock, 'synced');
