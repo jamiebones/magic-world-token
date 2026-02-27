@@ -47,7 +47,7 @@ const orderSchema = new mongoose.Schema({
   status: {
     type: Number,
     required: true,
-    enum: [0, 1, 2, 3], // 0 = Active, 1 = Filled, 2 = Cancelled, 3 = Expired
+    enum: [0, 1, 2, 3, 4], // 0 = Active, 1 = Filled, 2 = Partially Filled, 3 = Cancelled, 4 = Expired
     index: true,
     default: 0
   },

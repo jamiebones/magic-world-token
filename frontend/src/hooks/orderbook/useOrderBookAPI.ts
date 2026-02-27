@@ -13,7 +13,7 @@ interface Order {
     pricePerMWG: string;
     filled: string;
     remaining: string;
-    status: string;
+    status: number;
     createdAt: string;
     expiresAt: string;
     [key: string]: unknown;

@@ -365,7 +365,7 @@ class OrderBookEventListener {
         return;
       }
 
-      await order.updateStatus(2); // Cancelled
+      await order.updateStatus(3); // Cancelled (matches contract OrderStatus.CANCELLED = 3)
       logger.info(`[OrderBook Order #${eventData.orderId} marked as cancelled`);
     } catch (error) {
       logger.error(`[OrderBook Error saving OrderCancelled #${eventData.orderId}:`, error);
