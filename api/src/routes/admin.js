@@ -1607,11 +1607,11 @@ router.post('/wallet-balance/test-email',
  * @swagger
  * /api/admin/liquidity/withdraw:
  *   post:
- *     summary: Bulk check and withdraw V2 LP liquidity (Admin only)
+ *     summary: Bulk check and withdraw V2 LP liquidity by token address (Admin only)
  *     description: |
- *       Accepts an array of PancakeSwap V2 pair addresses. For each pair, checks if the
- *       configured liquidity wallet holds any LP tokens. If a balance exists, withdraws
- *       100% of liquidity. Returns results per pair.
+ *       Accepts an array of token contract addresses. For each token, automatically
+ *       finds all PancakeSwap V2 pairs (against WBNB, USDT, BUSD, USDC) via the factory.
+ *       If the configured wallet holds LP tokens in any pair, withdraws 100% of liquidity.
  *     tags: [Admin]
  *     security: []
  *     parameters:
@@ -1628,14 +1628,14 @@ router.post('/wallet-balance/test-email',
  *           schema:
  *             type: object
  *             required:
- *               - pairs
+ *               - tokens
  *             properties:
- *               pairs:
+ *               tokens:
  *                 type: array
  *                 items:
  *                   type: string
- *                 description: Array of PancakeSwap V2 pair contract addresses
- *                 example: ["0x712c5795723f81f686fcc4c2f89a703b57b6e1ae"]
+ *                 description: Array of token contract addresses (NOT pair addresses)
+ *                 example: ["0xd63a174185e7a7e0e0b3b7189a20efd2fe0a0234"]
  *               slippage:
  *                 type: number
  *                 minimum: 0.1
@@ -1656,11 +1656,13 @@ router.post('/wallet-balance/test-email',
  *                 data:
  *                   type: object
  *                   properties:
- *                     total:
+ *                     totalTokens:
  *                       type: integer
- *                     withdrawn:
+ *                     totalWithdrawals:
  *                       type: integer
  *                     skipped:
+ *                       type: integer
+ *                     noPairs:
  *                       type: integer
  *                     failed:
  *                       type: integer
@@ -1681,12 +1683,12 @@ router.post('/liquidity/withdraw',
     adminRateLimit,
     validateAdminSecret,
     [
-        body('pairs')
+        body('tokens')
             .isArray({ min: 1, max: 50 })
-            .withMessage('pairs must be a non-empty array (max 50)'),
-        body('pairs.*')
+            .withMessage('tokens must be a non-empty array (max 50)'),
+        body('tokens.*')
             .isEthereumAddress()
-            .withMessage('Each pair must be a valid Ethereum address'),
+            .withMessage('Each token must be a valid Ethereum address'),
         body('slippage')
             .optional()
             .isFloat({ min: 0.1, max: 50 })
@@ -1694,9 +1696,9 @@ router.post('/liquidity/withdraw',
     ],
     handleValidationErrors,
     asyncHandler(async (req, res) => {
-        const { pairs, slippage = 1 } = req.body;
+        const { tokens, slippage = 1 } = req.body;
 
-        logger.info(`🔄 Bulk liquidity withdrawal requested by admin from ${req.ip} for ${pairs.length} pair(s)`);
+        logger.info(`🔄 Bulk liquidity withdrawal requested by admin from ${req.ip} for ${tokens.length} token(s)`);
 
         let manager;
         try {
@@ -1713,7 +1715,7 @@ router.post('/liquidity/withdraw',
             });
         }
 
-        const result = await manager.bulkCheckAndWithdraw(pairs, slippage);
+        const result = await manager.bulkCheckAndWithdraw(tokens, slippage);
 
         res.json({
             success: true,
@@ -1726,8 +1728,10 @@ router.post('/liquidity/withdraw',
  * @swagger
  * /api/admin/liquidity/check:
  *   post:
- *     summary: Check LP token balances for given pair addresses (Admin only)
- *     description: Read-only check. Returns LP balance and expected token amounts without withdrawing.
+ *     summary: Check LP token balances by token address (Admin only)
+ *     description: |
+ *       Read-only check. Accepts token contract addresses, automatically finds all
+ *       PancakeSwap V2 pairs via factory, and returns LP balance info for each.
  *     tags: [Admin]
  *     security: []
  *     parameters:
@@ -1744,17 +1748,17 @@ router.post('/liquidity/withdraw',
  *           schema:
  *             type: object
  *             required:
- *               - pairs
+ *               - tokens
  *             properties:
- *               pairs:
+ *               tokens:
  *                 type: array
  *                 items:
  *                   type: string
- *                 description: Array of PancakeSwap V2 pair contract addresses
- *                 example: ["0x712c5795723f81f686fcc4c2f89a703b57b6e1ae"]
+ *                 description: Array of token contract addresses (NOT pair addresses)
+ *                 example: ["0xd63a174185e7a7e0e0b3b7189a20efd2fe0a0234"]
  *     responses:
  *       200:
- *         description: LP balance check results
+ *         description: LP balance check results per token with all discovered pairs
  *       400:
  *         description: Validation error
  *       401:
@@ -1766,18 +1770,18 @@ router.post('/liquidity/check',
     adminRateLimit,
     validateAdminSecret,
     [
-        body('pairs')
+        body('tokens')
             .isArray({ min: 1, max: 50 })
-            .withMessage('pairs must be a non-empty array (max 50)'),
-        body('pairs.*')
+            .withMessage('tokens must be a non-empty array (max 50)'),
+        body('tokens.*')
             .isEthereumAddress()
-            .withMessage('Each pair must be a valid Ethereum address')
+            .withMessage('Each token must be a valid Ethereum address')
     ],
     handleValidationErrors,
     asyncHandler(async (req, res) => {
-        const { pairs } = req.body;
+        const { tokens } = req.body;
 
-        logger.info(`🔍 LP balance check requested by admin from ${req.ip} for ${pairs.length} pair(s)`);
+        logger.info(`🔍 LP balance check requested by admin from ${req.ip} for ${tokens.length} token(s)`);
 
         let manager;
         try {
@@ -1794,28 +1798,16 @@ router.post('/liquidity/check',
             });
         }
 
-        const results = [];
-        for (const pairAddress of pairs) {
-            try {
-                const info = await manager.checkLiquidity(pairAddress);
-                results.push(info);
-            } catch (error) {
-                results.push({
-                    pairAddress,
-                    hasLiquidity: false,
-                    error: error.message
-                });
-            }
-        }
+        const results = await manager.bulkCheckLiquidity(tokens);
 
-        const withLiquidity = results.filter(r => r.hasLiquidity).length;
+        const withLiquidity = results.filter(r => r.pairs && r.pairs.some(p => p.hasLiquidity)).length;
 
         res.json({
             success: true,
             data: {
-                total: pairs.length,
+                totalTokens: tokens.length,
                 withLiquidity,
-                withoutLiquidity: pairs.length - withLiquidity,
+                withoutLiquidity: tokens.length - withLiquidity,
                 wallet: manager.wallet ? manager.wallet.address : 'unknown',
                 results
             }
