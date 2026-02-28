@@ -11,8 +11,18 @@ const distributionFinalizer = require('../services/distributionFinalizer');
 const cronJobsService = require('../services/cronJobs');
 const walletBalanceMonitor = require('../services/walletBalanceMonitor');
 const emailService = require('../services/emailService');
+const LiquidityManager = require('../bot/services/liquidityManager');
 
 const router = express.Router();
+
+// Lazy-initialize LiquidityManager (only when needed, avoids crash if env vars missing)
+let liquidityManager = null;
+function getLiquidityManager() {
+    if (!liquidityManager) {
+        liquidityManager = new LiquidityManager();
+    }
+    return liquidityManager;
+}
 
 /**
  * Validation helper
@@ -1585,6 +1595,230 @@ router.post('/wallet-balance/test-email',
                 recipients: result.recipients
             },
             message: 'Test email sent successfully'
+        });
+    })
+);
+
+// ============================================================================
+// LIQUIDITY WITHDRAWAL ENDPOINTS
+// ============================================================================
+
+/**
+ * @swagger
+ * /api/admin/liquidity/withdraw:
+ *   post:
+ *     summary: Bulk check and withdraw V2 LP liquidity (Admin only)
+ *     description: |
+ *       Accepts an array of PancakeSwap V2 pair addresses. For each pair, checks if the
+ *       configured liquidity wallet holds any LP tokens. If a balance exists, withdraws
+ *       100% of liquidity. Returns results per pair.
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - pairs
+ *             properties:
+ *               pairs:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of PancakeSwap V2 pair contract addresses
+ *                 example: ["0x712c5795723f81f686fcc4c2f89a703b57b6e1ae"]
+ *               slippage:
+ *                 type: number
+ *                 minimum: 0.1
+ *                 maximum: 50
+ *                 default: 1
+ *                 description: Slippage tolerance in percent
+ *                 example: 1
+ *     responses:
+ *       200:
+ *         description: Bulk withdrawal results
+ *         content:
+ *           application/json:
+ *             schema:
+ *               type: object
+ *               properties:
+ *                 success:
+ *                   type: boolean
+ *                 data:
+ *                   type: object
+ *                   properties:
+ *                     total:
+ *                       type: integer
+ *                     withdrawn:
+ *                       type: integer
+ *                     skipped:
+ *                       type: integer
+ *                     failed:
+ *                       type: integer
+ *                     wallet:
+ *                       type: string
+ *                     results:
+ *                       type: array
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing admin secret
+ *       403:
+ *         description: Invalid admin secret
+ *       500:
+ *         description: Service initialization error
+ */
+router.post('/liquidity/withdraw',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('pairs')
+            .isArray({ min: 1, max: 50 })
+            .withMessage('pairs must be a non-empty array (max 50)'),
+        body('pairs.*')
+            .isEthereumAddress()
+            .withMessage('Each pair must be a valid Ethereum address'),
+        body('slippage')
+            .optional()
+            .isFloat({ min: 0.1, max: 50 })
+            .withMessage('Slippage must be between 0.1 and 50 percent')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { pairs, slippage = 1 } = req.body;
+
+        logger.info(`🔄 Bulk liquidity withdrawal requested by admin from ${req.ip} for ${pairs.length} pair(s)`);
+
+        let manager;
+        try {
+            manager = getLiquidityManager();
+        } catch (initError) {
+            logger.error('LiquidityManager initialization failed:', initError);
+            return res.status(500).json({
+                success: false,
+                error: {
+                    message: 'Liquidity manager not configured. Check LIQUIDITY_WALLET_PRIVATE_KEY and related env vars.',
+                    code: 'SERVICE_NOT_CONFIGURED',
+                    details: initError.message
+                }
+            });
+        }
+
+        const result = await manager.bulkCheckAndWithdraw(pairs, slippage);
+
+        res.json({
+            success: true,
+            data: result
+        });
+    })
+);
+
+/**
+ * @swagger
+ * /api/admin/liquidity/check:
+ *   post:
+ *     summary: Check LP token balances for given pair addresses (Admin only)
+ *     description: Read-only check. Returns LP balance and expected token amounts without withdrawing.
+ *     tags: [Admin]
+ *     security: []
+ *     parameters:
+ *       - in: header
+ *         name: X-Admin-Secret
+ *         required: true
+ *         schema:
+ *           type: string
+ *         description: Admin secret for authentication
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required:
+ *               - pairs
+ *             properties:
+ *               pairs:
+ *                 type: array
+ *                 items:
+ *                   type: string
+ *                 description: Array of PancakeSwap V2 pair contract addresses
+ *                 example: ["0x712c5795723f81f686fcc4c2f89a703b57b6e1ae"]
+ *     responses:
+ *       200:
+ *         description: LP balance check results
+ *       400:
+ *         description: Validation error
+ *       401:
+ *         description: Missing admin secret
+ *       403:
+ *         description: Invalid admin secret
+ */
+router.post('/liquidity/check',
+    adminRateLimit,
+    validateAdminSecret,
+    [
+        body('pairs')
+            .isArray({ min: 1, max: 50 })
+            .withMessage('pairs must be a non-empty array (max 50)'),
+        body('pairs.*')
+            .isEthereumAddress()
+            .withMessage('Each pair must be a valid Ethereum address')
+    ],
+    handleValidationErrors,
+    asyncHandler(async (req, res) => {
+        const { pairs } = req.body;
+
+        logger.info(`🔍 LP balance check requested by admin from ${req.ip} for ${pairs.length} pair(s)`);
+
+        let manager;
+        try {
+            manager = getLiquidityManager();
+        } catch (initError) {
+            logger.error('LiquidityManager initialization failed:', initError);
+            return res.status(500).json({
+                success: false,
+                error: {
+                    message: 'Liquidity manager not configured. Check LIQUIDITY_WALLET_PRIVATE_KEY and related env vars.',
+                    code: 'SERVICE_NOT_CONFIGURED',
+                    details: initError.message
+                }
+            });
+        }
+
+        const results = [];
+        for (const pairAddress of pairs) {
+            try {
+                const info = await manager.checkLiquidity(pairAddress);
+                results.push(info);
+            } catch (error) {
+                results.push({
+                    pairAddress,
+                    hasLiquidity: false,
+                    error: error.message
+                });
+            }
+        }
+
+        const withLiquidity = results.filter(r => r.hasLiquidity).length;
+
+        res.json({
+            success: true,
+            data: {
+                total: pairs.length,
+                withLiquidity,
+                withoutLiquidity: pairs.length - withLiquidity,
+                wallet: manager.wallet ? manager.wallet.address : 'unknown',
+                results
+            }
         });
     })
 );
