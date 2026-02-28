@@ -24,6 +24,11 @@ const PancakeFactoryABI = [
 // PancakeSwap V2 Factory address on BSC Mainnet
 const PANCAKE_V2_FACTORY = '0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73';
 
+// PancakeSwap V2 Router address on BSC Mainnet
+// NOTE: This MUST be the V2 router, NOT the V3 Smart Router.
+// removeLiquidityETH only exists on the V2 router.
+const PANCAKE_V2_ROUTER = '0x10ED43C718714eb63d5aA57B78B54704E256024E';
+
 // Common quote tokens on BSC to check pairs against
 const QUOTE_TOKENS = {
     WBNB: '0xbb4CdB9CBd36B01bD1cBaEBF2De08d9173bc095c',
@@ -40,7 +45,6 @@ class LiquidityManager {
         const required = {
             BSC_MAINNET_RPC_URL: process.env.BSC_MAINNET_RPC_URL,
             LIQUIDITY_WALLET_PRIVATE_KEY: process.env.LIQUIDITY_WALLET_PRIVATE_KEY,
-            PANCAKE_ROUTER_ADDRESS: process.env.PANCAKE_ROUTER_ADDRESS,
             WBNB_ADDRESS: process.env.WBNB_ADDRESS
         };
 
@@ -56,8 +60,9 @@ class LiquidityManager {
             this.provider
         );
 
+        // Always use the V2 Router for liquidity removal (NOT the V3 Smart Router)
         this.router = new ethers.Contract(
-            process.env.PANCAKE_ROUTER_ADDRESS,
+            PANCAKE_V2_ROUTER,
             PancakeRouterABI,
             this.wallet
         );
@@ -69,9 +74,9 @@ class LiquidityManager {
         );
 
         this.WBNB = process.env.WBNB_ADDRESS.toLowerCase();
-        this.routerAddress = process.env.PANCAKE_ROUTER_ADDRESS;
+        this.routerAddress = PANCAKE_V2_ROUTER;
 
-        logger.info(`LiquidityManager initialized. Wallet: ${this.wallet.address}`);
+        logger.info(`LiquidityManager initialized. Wallet: ${this.wallet.address}, V2 Router: ${PANCAKE_V2_ROUTER}`);
     }
 
     /**
