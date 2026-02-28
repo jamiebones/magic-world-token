@@ -275,6 +275,7 @@ class LiquidityManager {
 
             // 6. Execute removal
             let tx;
+            let method;
             if (hasWBNB) {
                 // One side is WBNB — use removeLiquidityETH to receive native BNB
                 const otherToken = token0IsWBNB ? info.token1 : info.token0;
@@ -285,14 +286,31 @@ class LiquidityManager {
                 logger.info(`   Token: ${otherToken}`);
                 logger.info(`   LP Amount: ${ethers.formatEther(info.lpBalanceRaw)}`);
 
-                tx = await this.router.removeLiquidityETH(
-                    otherToken,
-                    info.lpBalanceRaw,
-                    amountTokenMin,
-                    amountETHMin,
-                    this.wallet.address,
-                    deadline
-                );
+                try {
+                    tx = await this.router.removeLiquidityETH(
+                        otherToken,
+                        info.lpBalanceRaw,
+                        amountTokenMin,
+                        amountETHMin,
+                        this.wallet.address,
+                        deadline
+                    );
+                    method = 'removeLiquidityETH';
+                } catch (ethError) {
+                    // Token likely has transfer tax — retry with fee-on-transfer variant
+                    logger.warn(`⚠️  removeLiquidityETH failed (likely fee-on-transfer token). Retrying with removeLiquidityETHSupportingFeeOnTransferTokens...`);
+                    logger.warn(`   Error: ${ethError.message?.substring(0, 120)}`);
+
+                    tx = await this.router.removeLiquidityETHSupportingFeeOnTransferTokens(
+                        otherToken,
+                        info.lpBalanceRaw,
+                        amountTokenMin,
+                        amountETHMin,
+                        this.wallet.address,
+                        deadline
+                    );
+                    method = 'removeLiquidityETHSupportingFeeOnTransferTokens';
+                }
             } else {
                 // Both sides are ERC20 — use removeLiquidity
                 logger.info(`📤 Calling removeLiquidity...`);
@@ -309,6 +327,7 @@ class LiquidityManager {
                     this.wallet.address,
                     deadline
                 );
+                method = 'removeLiquidity';
             }
 
             logger.info(`📤 Transaction sent: ${tx.hash}`);
@@ -336,7 +355,7 @@ class LiquidityManager {
                 expectedToken1: ethers.formatEther(amount1Expected),
                 minToken0: ethers.formatEther(amount0Min),
                 minToken1: ethers.formatEther(amount1Min),
-                method: hasWBNB ? 'removeLiquidityETH' : 'removeLiquidity',
+                method,
                 gasUsed: receipt.gasUsed.toString(),
                 gasCostBNB,
                 slippage: `${slippage}%`,
