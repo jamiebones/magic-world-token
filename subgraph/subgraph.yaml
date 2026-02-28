@@ -1,0 +1,37 @@
+specVersion: 0.0.5
+schema:
+  file: ./schema.graphql
+dataSources:
+  - kind: ethereum
+    name: MWGOrderBook
+    network: bsc
+    source:
+      address: "0xE5214A2bC38edD3bCf0852aebE448c853dd9C3eF"
+      abi: MWGOrderBook
+      # Deployment block for BSC mainnet (Nov 24, 2025)
+      # Verify exact block at: https://bscscan.com/tx/0xe0a2a4d67280726e1e6562e812d89a87d6ee4500a28de72809eecb3b2f148190
+      startBlock: 69277638
+    mapping:
+      kind: ethereum/events
+      apiVersion: 0.0.7
+      language: wasm/assemblyscript
+      entities:
+        - Order
+        - OrderFill
+        - OrderCancellation
+        - Withdrawal
+      abis:
+        - name: MWGOrderBook
+          file: ./abis/MWGOrderBook.json
+      eventHandlers:
+        - event: OrderCreated(indexed uint256,indexed address,uint8,uint256,uint256,uint256,uint256)
+          handler: handleOrderCreated
+        - event: OrderFilled(indexed uint256,indexed uint256,indexed address,uint256,uint256,uint8)
+          handler: handleOrderFilled
+        - event: OrderCancelled(indexed uint256,indexed address,uint256,uint256)
+          handler: handleOrderCancelled
+        - event: OrderExpired(indexed uint256)
+          handler: handleOrderExpired
+        - event: WithdrawalClaimed(indexed address,uint256)
+          handler: handleWithdrawalClaimed
+      file: ./src/mapping.ts

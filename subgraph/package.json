@@ -1,0 +1,16 @@
+{
+    "name": "mwg-order-book-subgraph",
+    "version": "1.0.0",
+    "description": "The Graph subgraph for MWGOrderBook contract on BSC",
+    "scripts": {
+        "codegen": "graph codegen",
+        "build": "graph build",
+        "deploy:studio": "graph deploy --studio mwg-order-book",
+        "deploy:testnet": "graph deploy --studio mwg-order-book-testnet",
+        "auth": "graph auth --studio"
+    },
+    "dependencies": {
+        "@graphprotocol/graph-cli": "^0.68.0",
+        "@graphprotocol/graph-ts": "^0.35.1"
+    }
+}

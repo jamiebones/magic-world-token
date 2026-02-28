@@ -1,0 +1,52 @@
+type Order @entity(immutable: false) {
+  id: ID! # orderId as string
+  orderId: BigInt!
+  user: Bytes!
+  orderType: Int! # 0 = BUY, 1 = SELL
+  mwgAmount: BigInt!
+  bnbAmount: BigInt!
+  pricePerMWG: BigInt!
+  filled: BigInt!
+  remaining: BigInt!
+  status: Int! # 0=ACTIVE, 1=FILLED, 2=PARTIALLY_FILLED, 3=CANCELLED, 4=EXPIRED
+  feeAtCreation: BigInt!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  createdAt: BigInt! # block timestamp
+  expiresAt: BigInt! # unix timestamp
+  fills: [OrderFill!]! @derivedFrom(field: "order")
+}
+
+type OrderFill @entity(immutable: true) {
+  id: ID! # orderId-fillId
+  orderId: BigInt!
+  order: Order!
+  fillId: BigInt!
+  filler: Bytes!
+  mwgAmount: BigInt!
+  bnbAmount: BigInt!
+  newStatus: Int!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+type OrderCancellation @entity(immutable: true) {
+  id: ID! # orderId
+  orderId: BigInt!
+  user: Bytes!
+  bnbRefund: BigInt!
+  mwgRefund: BigInt!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}
+
+type Withdrawal @entity(immutable: true) {
+  id: ID! # user-txHash
+  user: Bytes!
+  amount: BigInt!
+  txHash: Bytes!
+  blockNumber: BigInt!
+  timestamp: BigInt!
+}

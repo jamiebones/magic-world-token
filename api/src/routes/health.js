@@ -2,7 +2,6 @@ const express = require('express');
 const blockchainService = require('../services/blockchain');
 const databaseService = require('../services/database');
 const { getApiKeyStats } = require('../middleware/auth');
-const { OrderBookEventListener } = require('../services');
 
 const router = express.Router();
 

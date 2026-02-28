@@ -11,7 +11,6 @@ import { useCreateBuyOrder, useCreateSellOrder } from "@/hooks/orderbook/useOrde
 import { useBestSellPrice, useBestBuyPrice, useMinimumAmounts, useOrderBookPaused } from "@/hooks/orderbook/useOrderBook";
 import { useOrderBookTransactionToast, copyToClipboard } from "@/hooks/orderbook/useOrderBookToasts";
 import { useMWGBalance, useMWGAllowance, useApproveMWG } from "@/hooks/orderbook/useOrderBookActions";
-import { updateOrderEmail } from "@/hooks/orderbook/useOrderBookAPI";
 import { CONTRACT_ADDRESSES } from "@/config/contracts";
 
 export default function CreateOrderPage() {
@@ -23,13 +22,13 @@ export default function CreateOrderPage() {
   const { bestBuy } = useBestBuyPrice();
   const { minMWGAmount, minBNBAmount } = useMinimumAmounts();
   const { isPaused } = useOrderBookPaused();
-  
+
   // Tab state
   const [orderType, setOrderType] = useState<"buy" | "sell">("buy");
-  
+
   // Buy order hooks
   const { createBuyOrder, isPending: isBuyPending, isSuccess: isBuySuccess, hash: buyHash, error: buyError } = useCreateBuyOrder();
-  
+
   // Sell order hooks
   const { balance: mwgBalance } = useMWGBalance(address);
   const { allowance } = useMWGAllowance(address, CONTRACT_ADDRESSES.ORDER_BOOK);
@@ -63,53 +62,7 @@ export default function CreateOrderPage() {
     }
   }, [isSuccess, router]);
 
-  // Associate email with order after successful creation
-  useEffect(() => {
-    const associateEmail = async () => {
-      if (!isSuccess || !address) return;
 
-      const pendingEmail = sessionStorage.getItem('pendingOrderEmail');
-      if (!pendingEmail) return;
-
-      try {
-        // Wait a bit for the event listener to save the order to DB
-        await new Promise(resolve => setTimeout(resolve, 3000));
-
-        // Fetch user's most recent order to get the orderId
-        const response = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001'}/api/orderbook/user/${address}/orders?limit=1&sort=createdAt:desc`);
-        
-        if (!response.ok) {
-          throw new Error('Failed to fetch user orders');
-        }
-
-        const data = await response.json();
-        
-        if (!data.success || !data.orders || data.orders.length === 0) {
-          console.error('No orders found for user');
-          return;
-        }
-
-        const latestOrder = data.orders[0];
-        
-        // Associate email with the order
-        const updateResponse = await updateOrderEmail(latestOrder.orderId, pendingEmail, address);
-        
-        if (updateResponse.success) {
-          toast.success('📧 Email notification set up successfully!');
-          sessionStorage.removeItem('pendingOrderEmail');
-        } else {
-          console.error('Failed to update order email:', updateResponse.error);
-          toast.error('⚠️ Could not set up email notification. You can try again later.');
-        }
-      } catch (error) {
-        console.error('Error associating email with order:', error);
-        // Don't show error toast - order was created successfully, email is just a bonus feature
-        // User can still manually check their orders
-      }
-    };
-
-    associateEmail();
-  }, [isSuccess, address]);
 
   const handleCreateBuyOrder = async (
     mwgAmount: bigint,
@@ -133,7 +86,7 @@ export default function CreateOrderPage() {
       toast.error(`Insufficient BNB balance. Required: ${(Number(bnbValue) / 1e18).toFixed(6)} BNB`);
       return;
     }
-    
+
     createBuyOrder({
       mwgAmount,
       pricePerMWG,
@@ -174,7 +127,7 @@ export default function CreateOrderPage() {
       toast.error("Please approve MWG tokens first");
       return;
     }
-    
+
     createSellOrder({
       mwgAmount,
       pricePerMWG,
@@ -192,7 +145,7 @@ export default function CreateOrderPage() {
       toast.error("Please connect your wallet");
       return;
     }
-    
+
     try {
       await approve({ spender: CONTRACT_ADDRESSES.ORDER_BOOK, amount });
       // Toast handled by useOrderBookTransactionToast hook
@@ -268,8 +221,8 @@ export default function CreateOrderPage() {
               Create Order
             </h1>
             <p className="text-gray-400">
-              {orderType === "buy" 
-                ? "Deposit BNB and specify how much MWG you want to buy" 
+              {orderType === "buy"
+                ? "Deposit BNB and specify how much MWG you want to buy"
                 : "Deposit MWG and specify how much BNB you want to receive"}
             </p>
           </div>
@@ -278,21 +231,19 @@ export default function CreateOrderPage() {
           <div className="mb-6 flex gap-2 bg-gray-800/50 p-1 rounded-lg">
             <button
               onClick={() => setOrderType("buy")}
-              className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${
-                orderType === "buy"
+              className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${orderType === "buy"
                   ? "bg-gradient-to-r from-green-600 to-emerald-600 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               🟢 Buy MWG
             </button>
             <button
               onClick={() => setOrderType("sell")}
-              className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${
-                orderType === "sell"
+              className={`flex-1 py-3 px-4 rounded-md font-semibold transition-all ${orderType === "sell"
                   ? "bg-gradient-to-r from-red-600 to-pink-600 text-white shadow-lg"
                   : "text-gray-400 hover:text-white"
-              }`}
+                }`}
             >
               🔴 Sell MWG
             </button>
